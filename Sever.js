@@ -1,0 +1,43 @@
+import express from "express";
+import dotenv from 'dotenv';
+import ConnectDB from "./Database/ConnectDB.js";
+import CourseRoute from "./Route/CourseRoute.js";
+import McqRoute from "./Route/McqRoute.js";
+import PracticeplanRoute from "./Route/PracticeplanRoute.js";
+import StudentRoute from "./Route/StudentRoute.js"
+import AdminRoute from "./Route/AdminRoute.js"
+import cors from "cors";
+import cookieParser from "cookie-parser";
+
+
+const app = express();
+
+dotenv.config();
+app.use(cors({
+     origin: process.env.CLIENT_URL || "http://localhost:5173",
+    credentials: true,
+}));
+
+
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+app.use(cookieParser());
+
+
+app.get('/',(req,res)=>{
+    res.send('Hello World!');
+})
+
+app.use('/api/course', CourseRoute);
+app.use('/api/mcq', McqRoute);
+app.use('/api/practiceplan', PracticeplanRoute);
+app.use('/api/student', StudentRoute)
+app.use('/api/admin', AdminRoute)
+
+app.listen(PORT, () => {
+    ConnectDB();
+    console.log(`Server is running on port ${PORT}`);
+});
+
+
