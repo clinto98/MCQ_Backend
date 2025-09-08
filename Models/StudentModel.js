@@ -54,6 +54,11 @@ const studentSchema = new mongoose.Schema(
     //   ref: "Parent",
     //   default: null,
     // },
+    praticeMode: {
+      type: String,
+      enum: ["Getting Started", "On My Way", "Confident", "Pro Level"],
+    },
+    
     schoolName: {
       type: String,
       // required: true,
