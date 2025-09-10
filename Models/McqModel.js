@@ -40,7 +40,7 @@ const twelfthSchema = new mongoose.Schema(
       trim: true,
     },
     options: {
-      type: [optionSchema], 
+      type: [optionSchema],
       required: true,
     },
     correctAnswer: {
@@ -57,6 +57,14 @@ const twelfthSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    FrequentlyAsked: {
+      type: Boolean,
+      default: false,
+    },
+    unit: {
+      type: String,
+      required: true,
     },
     topic: {
       type: String,

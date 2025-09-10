@@ -291,3 +291,33 @@ export const studentLogout = (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 }
+
+
+export const updatePraticeMode = async (req, res) => {
+  try {
+    const { studentId, praticeMode } = req.body
+
+    // Validate input
+    const validModes = ["Getting Started", "On My Way", "Confident", "Pro Level"];
+    if (!validModes.includes(praticeMode)) {
+      return res.status(400).json({ message: "Invalid practice mode." });
+    }
+
+    // Find the student and update the practice mode
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found." });
+    }
+
+    student.praticeMode = praticeMode;
+    await student.save();
+
+    res.status(200).json({
+      message: "Practice mode updated successfully.",
+      praticeMode: student.praticeMode,
+    });
+  } catch (error) {
+    console.error("Error updating practice mode:", error);
+    res.status(500).json({ message: "Server error." });
+  }
+};

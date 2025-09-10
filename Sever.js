@@ -6,6 +6,7 @@ import McqRoute from "./Route/McqRoute.js";
 import PracticeplanRoute from "./Route/PracticeplanRoute.js";
 import StudentRoute from "./Route/StudentRoute.js"
 import AdminRoute from "./Route/AdminRoute.js"
+import QuestionPaperRoute from "./Route/QuestionPaperRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
@@ -32,8 +33,10 @@ app.get('/',(req,res)=>{
 app.use('/api/course', CourseRoute);
 app.use('/api/mcq', McqRoute);
 app.use('/api/practiceplan', PracticeplanRoute);
-app.use('/api/student', StudentRoute)
-app.use('/api/admin', AdminRoute)
+app.use('/api/student', StudentRoute);
+app.use('/api/admin', AdminRoute);
+app.use('/api/questionpaper', QuestionPaperRoute);
+
 
 app.listen(PORT, () => {
     ConnectDB();

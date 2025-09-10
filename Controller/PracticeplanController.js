@@ -1,6 +1,5 @@
 import twelve from "../Models/McqModel.js";
 import PracticePlan from "../Models/PraticePlanModel.js";
-import mongoose from "mongoose";
 import RandomQuestions from '../Models/RandomquestionsModel.js'
 import MissedQuestions from '../Models/MissedquestionsModel.js'
 
@@ -299,8 +298,8 @@ export const checkAnswerById = async (req, res) => {
         nextSection === 1
           ? session.Section1[nextIndex]?._id
           : nextSection === 2
-          ? session.Section2[nextIndex]?._id
-          : session.Section3[nextIndex]?._id,
+            ? session.Section2[nextIndex]?._id
+            : session.Section3[nextIndex]?._id,
     };
 
     await session.save();
