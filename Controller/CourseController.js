@@ -1,5 +1,4 @@
 import Course from "../Models/CourseModel.js";
-import Enrollment from "../Models/EnrollmentModel.js";
 
 
 export const createCourse = async (req, res) => {
@@ -28,22 +27,26 @@ export const createCourse = async (req, res) => {
 };
 
 
-export const getAllCoursesforHighersecondary = async (req, res) => {
+export const getAllCourses = async (req, res) => {
   try {
-    // Instead of expecting a single classStandard, 
-    // fetch all courses where standard is 10, 11, or 12
-    const higherSecondaryStandards = ["10", "11", "12"];
+    const { classStandard } = req.body
+    
+    console.log("data",req.body);
+   
 
-    const courses = await Course.find({
-      standerd: { $in: higherSecondaryStandards }
-    }).sort({ createdAt: -1 });
+    if (!classStandard) {
+      return res.status(400).json({ message: "Standard is required" });
+    }
+
+   
+    const courses = await Course.find({ standerd: classStandard }).sort({ createdAt: -1 });
 
     if (!courses || courses.length === 0) {
-      return res.status(404).json({ message: "No higher secondary courses found" });
+      return res.status(404).json({ message: "No courses found for this standard" });
     }
 
     res.status(200).json({
-      message: "Higher secondary courses retrieved successfully",
+      message: "Courses retrieved successfully",
       count: courses.length,
       courses
     });
@@ -54,70 +57,6 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
     });
   }
 };
-
-
-
-// Enroll or update enrollment
-export const enrollCourses = async (req, res) => {
-  try {
-    const { studentId, courseIds, preferredSubjects } = req.body;
-
-    // Find existing enrollment or create new
-    let enrollment = await Enrollment.findOne({ studentId });
-
-    if (!enrollment) {
-      enrollment = new Enrollment({
-        studentId,
-        enrolledCourses: courseIds.map(id => ({ courseId: id })),
-        preferredSubjects
-      });
-    } else {
-      // Add new courses avoiding duplicates
-      const existingCourseIds = enrollment.enrolledCourses.map(c => c.courseId.toString());
-      const newCourses = courseIds
-        .filter(id => !existingCourseIds.includes(id))
-        .map(id => ({ courseId: id }));
-
-      enrollment.enrolledCourses.push(...newCourses);
-
-      // Update preferred subjects (merge and remove duplicates)
-      enrollment.preferredSubjects = Array.from(new Set([...enrollment.preferredSubjects, ...preferredSubjects]));
-    }
-
-    await enrollment.save();
-
-    res.status(200).json({
-      message: "Enrollment updated successfully",
-      enrollment
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
-// Get enrollment details
-export const getEnrollment = async (req, res) => {
-  try {
-    const { studentId } = req.params;
-
-    const enrollment = await Enrollment.findOne({ studentId })
-      .populate("enrolledCourses.courseId", "title description");
-
-    if (!enrollment) {
-      return res.status(404).json({ message: "Enrollment not found" });
-    }
-
-    res.status(200).json({ enrollment });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
-
 
 
 
