@@ -1,4 +1,4 @@
-import PreviousQuestionPaper from "../Models/PreviousQuestionModel.js";
+import PreviousQuestionPaper from "../Models/QuestionPaperModel.js"
 
 
 export const addPreviousQuestionPaper = async (req, res) => {
@@ -13,17 +13,15 @@ export const addPreviousQuestionPaper = async (req, res) => {
             sourceType,
             questions,
             notes,
+            unit
         } = req.body;
 
-        // Validate required fields
-        if (!examYear || !examType || !subject || !syllabus || !standard || !paperName || !questions) {
+        if (!examYear || !examType || !subject || !syllabus || !standard || !paperName || !questions || !unit) {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
-        // Ensure questions is an array even if a single object is sent
         const questionsArray = Array.isArray(questions) ? questions : [questions];
 
-        // Create new document
         const newPaper = new PreviousQuestionPaper({
             examYear,
             examType,
@@ -34,10 +32,10 @@ export const addPreviousQuestionPaper = async (req, res) => {
             sourceType: sourceType || "Manual",
             questions: questionsArray,
             notes: notes || null,
+            unit
         });
 
         await newPaper.save();
-
         return res.status(201).json({
             message: "Previous question paper added successfully",
             paper: newPaper
@@ -47,3 +45,5 @@ export const addPreviousQuestionPaper = async (req, res) => {
         return res.status(500).json({ message: "Server error", error });
     }
 };
+
+

@@ -35,9 +35,7 @@ export const createPraticePlan = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-
     const questionCount = parseInt(totalQuestions) || 5;
-
 
     const totalNeeded = questionCount * 3;
 
@@ -465,11 +463,6 @@ export const getRandomQuestion = async (req, res) => {
 };
 
 
-
-
-
-
-
 export const getMissedQuestions = async (req, res) => {
   try {
     const { userId, subject } = req.body;
@@ -557,35 +550,6 @@ export const getMissedQuestions = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
-
-
-export const MockExamQuiz = async (req, res) => {
-
-  try {
-
-
-  } catch (error) {
-
-
-  }
-
-}
-
-
-export const TimedQuiz = async (req, res) => {
-
-  try {
-
-
-  } catch (error) {
-
-
-  }
-}
-
-
 
 export const createRandomQuestions = async (req, res) => {
   try {
@@ -728,3 +692,7 @@ export const GetRandomQuestions = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+
+

@@ -35,6 +35,15 @@ const previousQuestionSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    FrequentlyAsked: {
+        type: Boolean,
+        default: false,
+    },
+    difficulty: {
+        type: String,
+        enum: ["easy", "medium", "hard"],
+        default: "easy",
+    },
 });
 
 const previousPaperSchema = new mongoose.Schema(
@@ -70,11 +79,7 @@ const previousPaperSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
-        difficulty: {
-            type: String,
-            enum: ["easy", "medium", "hard"],
-            default: "easy",
-        },
+
         sourceType: {
             type: String,
             enum: ["AI", "PDF", "Manual", "Other"],
@@ -89,6 +94,10 @@ const previousPaperSchema = new mongoose.Schema(
             type: String,
             trim: true,
             default: null,
+        },
+        unit: {
+            type: String,
+            required: true,
         },
     },
     { timestamps: true }
