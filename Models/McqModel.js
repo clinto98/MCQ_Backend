@@ -66,6 +66,10 @@ const twelfthSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    unitNumber: {
+      type: Number,
+      required: true,
+    },
     topic: {
       type: String,
       required: true,

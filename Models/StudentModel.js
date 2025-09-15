@@ -18,7 +18,6 @@ const studentSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
     },
     countryCode: {
       type: String,
@@ -58,7 +57,7 @@ const studentSchema = new mongoose.Schema(
       type: String,
       enum: ["Getting Started", "On My Way", "Confident", "Pro Level"],
     },
-    
+
     schoolName: {
       type: String,
       // required: true,
@@ -120,6 +119,16 @@ const studentSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    userPreferences: [
+      {
+        practiceDuration: { type: String },
+        questionCount: { type: String },
+        preferredStudyTime: { type: String },
+        preferredQuizDays: [{ type: String }],
+        examDate: { type: String }
+      }
+    ]
+
   },
   { timestamps: true }
 );

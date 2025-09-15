@@ -2,11 +2,57 @@ import Student from "../Models/StudentModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
+import { OAuth2Client } from 'google-auth-library';
+import { sendOtpEmail } from "../helper/mailer.js";
 
 
 dotenv.config();
 
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+export const studentRegisterGoogle = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ message: "ID token is required" });
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload.email;
+    const fullName = payload.name;
+
+    let student = await Student.findOne({ email });
+
+    if (!student) {
+      student = new Student({
+        FullName: fullName,
+        email: email,
+        password: "", // or mark as external signup
+      });
+      await student.save();
+    }
+     else {
+      return res.status(200).json({ message: "Student already registered", student});
+     }
+
+    return res.status(201).json({
+      message: "Student signed up with Google successfully",
+      student: {
+        id: student._id,
+        FullName: student.FullName,
+        email: student.email,
+      },
+    });
+  } catch (error) {
+    console.error("Google signup error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 
 const generateToken = (user) => {
@@ -18,31 +64,41 @@ const generateToken = (user) => {
 
 
 export const emailRegister = async (req, res) => {
-
   try {
-
     const email = req.body.email;
 
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
+
     const existingEmail = await Student.findOne({ email });
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
     }
 
-    return res.status(200).json({ message: "Email is valid and available" });
+    // Generate a 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 20 * 60 * 1000; // 20 minutes expiry timestamp
 
+    // Send OTP via email
+    await sendOtpEmail(email, otpCode);
+
+    // Send OTP and expiry timestamp back to client (to be stored in localStorage)
+    return res.status(200).json({
+      message: "OTP sent to email",
+      otp: otpCode,
+      expiresAt: expiresAt
+    });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({ message: "Server error", error: error.message })
+    console.error(error.message);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
-
-}
+};
 
 
 
@@ -319,5 +375,92 @@ export const updatePraticeMode = async (req, res) => {
   } catch (error) {
     console.error("Error updating practice mode:", error);
     res.status(500).json({ message: "Server error." });
+  }
+};
+
+
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const student = await Student.findOne({ email });
+    if (!student || !student.otp || student.otp.code !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (student.otp.expiresAt < new Date()) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    // OTP is valid → remove it
+    student.otp = undefined;
+    await student.save();
+
+    return res.status(200).json({ message: "OTP verified successfully" });
+  } catch (error) {
+    console.error(error.message);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const updateUserPreferences = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const {
+      practiceDuration,
+      questionCount,
+      preferredStudyTime,
+      preferredQuizDays,
+      examDate
+    } = req.body;
+
+    // Validate studentId
+    if (!studentId) {
+      return res.status(400).json({ message: "Student ID is required." });
+    }
+
+    // Validate at least one preference field is provided
+    if (
+      !practiceDuration &&
+      !questionCount &&
+      !preferredStudyTime &&
+      (!preferredQuizDays || preferredQuizDays.length === 0) &&
+      !examDate
+    ) {
+      return res.status(400).json({ message: "At least one preference must be provided." });
+    }
+
+    // Find the student
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found." });
+    }
+
+    // Create new preference object
+    const newPreference = {
+      practiceDuration,
+      questionCount,
+      preferredStudyTime,
+      preferredQuizDays,
+      examDate
+    };
+
+    // Add the new preference to the array
+    student.userPreferences.push(newPreference);
+    await student.save();
+
+    return res.status(200).json({
+      message: "User preferences updated successfully.",
+      userPreferences: student.userPreferences
+    });
+  } catch (error) {
+    console.error("Error updating user preferences:", error);
+    return res.status(500).json({ message: "Server error.", error: error.message });
   }
 };

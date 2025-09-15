@@ -559,7 +559,24 @@ export const createRandomQuestions = async (req, res) => {
       return res.status(400).json({ message: "User ID and subject are required" });
     }
 
-    const questionCount = 5; // 🔹 5 from each section
+    // ✅ Check if there's an active session for the same subject
+    const existingActiveSession = await RandomQuestions.findOne({
+      userId,
+      subject,
+      isActive: true,
+    });
+
+    if (existingActiveSession) {
+      return res.status(400).json({
+        message: "An active session already exists for this subject. Please complete it before starting a new one.",
+        existingActiveSession
+      });
+    }
+
+    // ✅ Check if there's an active session for other subjects, allow creating new one
+    // No need to block if it's another subject
+
+    const questionCount = 10; // 🔹 5 from each section
     const totalNeeded = questionCount * 3;
 
     // Fetch random questions for subject
@@ -573,7 +590,7 @@ export const createRandomQuestions = async (req, res) => {
           options: 1,
           correctAnswer: 1,
           difficulty: 1,
-          topic: 1
+          topic: 1,
         },
       },
     ]);
@@ -607,7 +624,11 @@ export const createRandomQuestions = async (req, res) => {
       Section1: section1,
       Section2: section2,
       Section3: section3,
-      currentQuestion: { section: 1, questionIndex: 0, questionId: section1[0].questionId },
+      currentQuestion: {
+        section: 1,
+        questionIndex: 0,
+        questionId: section1[0].questionId,
+      },
       isActive: true,
       progress: { status: "in_progress" },
     });
@@ -623,6 +644,7 @@ export const createRandomQuestions = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 
 export const GetRandomQuestions = async (req, res) => {
