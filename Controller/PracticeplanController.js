@@ -2,6 +2,10 @@ import twelve from "../Models/McqModel.js";
 import PracticePlan from "../Models/PraticePlanModel.js";
 import RandomQuestions from '../Models/RandomquestionsModel.js'
 import MissedQuestions from '../Models/MissedquestionsModel.js'
+import FlaggedQuestion from '../Models/FlaggedquestionsModel.js'
+import MockQuestions from '../Models/MockQuestionModel.js'
+import PreviousyearQuestions from '../Models/Previousyearquestion.js'
+
 
 export const createPraticePlan = async (req, res) => {
 
@@ -463,66 +467,63 @@ export const getRandomQuestion = async (req, res) => {
 };
 
 
-export const getMissedQuestions = async (req, res) => {
+export const createMissedQuestions = async (req, res) => {
   try {
+    if (!req.body) {
+      return res.status(400).json({ message: "Request body is missing" });
+    }
     const { userId, subject } = req.body;
-
+    
     if (!userId || !subject) {
       return res.status(400).json({ message: "User ID and subject are required" });
     }
 
-    // 1. Get user's random session
-    const randomSession = await RandomQuestions.findOne({ userId, subject, isActive: true });
-    if (!randomSession) {
-      return res.status(404).json({ message: "No active random session found" });
+    // ✅ Collect all incorrect questions from all models
+    const allIncorrects = [];
+
+    const models = [RandomQuestions, FlaggedQuestion, MockQuestions, PreviousyearQuestions, PracticePlan];
+
+    for (const Model of models) {
+      const sessions = await Model.find({ userId, subject, isActive: true });
+
+      console.log("data",sessions);
+      
+
+      for (const session of sessions) {
+        const sections = ["Section1", "Section2", "Section3"];
+
+        for (const section of sections) {
+          if (Array.isArray(session[section])) {
+            const incorrects = session[section].filter(
+              (q) => q.status === "incorrect"
+            ).map((q, index) => ({
+              questionId: q.questionId,
+              index: index + 1,
+              status: q.status,
+              answeredAt: q.answeredAt,
+              attempts: q.attempts,
+            }));
+
+            allIncorrects.push(...incorrects);
+          }
+        }
+      }
     }
 
-    // 2. Collect only final incorrect + attempted > 1
-    const allQuestions = [
-      ...randomSession.Section1,
-      ...randomSession.Section2,
-      ...randomSession.Section3,
-    ];
-
-    const missed = allQuestions.filter(
-      (q) => q.status === "incorrect" && q.attempts > 1 // ✅ only incorrect in final status
-    );
-
-    if (!missed.length) {
-      return res.status(200).json({ message: "No missed questions found", questions: [] });
+    if (allIncorrects.length === 0) {
+      return res.status(200).json({ message: "No missed questions found" });
     }
 
-    // 3. Fetch full details
-    const questionIds = missed.map((q) => q.questionId);
-    const questionDocs = await twelve.find({ _id: { $in: questionIds } })
-      .select("_id question options correctAnswer");
-
-    const detailedMissed = missed.map((q, i) => {
-      const details = questionDocs.find(
-        (d) => d._id.toString() === q.questionId.toString()
-      );
-      return {
-        questionId: q.questionId,
-        index: i + 1,
-        attempts: q.attempts,
-        answeredAt: q.answeredAt,
-        status: "incorrect",
-        question: details?.question,
-        options: details?.options,
-        correctAnswer: details?.correctAnswer,
-      };
-    });
-
-    // 4. Save in MissedQuestions schema (upsert for user)
-    let missedSession = await MissedQuestions.findOneAndUpdate(
+    // ✅ Upsert into MissedQuestions
+    const missedSession = await MissedQuestions.findOneAndUpdate(
       { userId, subject, isActive: true },
       {
         userId,
         subject,
-        questions: detailedMissed,
+        questions: allIncorrects,
         currentQuestion: {
           index: 0,
-          questionId: detailedMissed[0].questionId,
+          questionId: allIncorrects[0].questionId,
         },
         progress: {
           completedQuestions: 0,
@@ -535,18 +536,15 @@ export const getMissedQuestions = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 5. Current question details
-    const currentQuestion = detailedMissed[0] || null;
-
-    return res.status(200).json({
-      message: "Missed questions fetched successfully",
+    return res.status(201).json({
+      message: "Missed questions session created successfully",
       subject,
-      questions: detailedMissed,
-      currentQuestion,
-      progress: missedSession.progress,
+      totalMissed: allIncorrects.length,
+      sessionId: missedSession._id,
     });
+
   } catch (error) {
-    console.error("Error fetching missed questions:", error);
+    console.error("Error creating missed questions:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

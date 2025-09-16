@@ -27,7 +27,7 @@ export const AdminLogin = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
-
+    
     const token = generateToken(admin);
     res.cookie("jwt", token, {
       httpOnly: true,

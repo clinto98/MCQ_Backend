@@ -54,7 +54,6 @@ export const studentRegisterGoogle = async (req, res) => {
   }
 };
 
-
 const generateToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECERT_KEY, {
     expiresIn: '15d',
@@ -62,33 +61,38 @@ const generateToken = (user) => {
 
 }
 
-
 export const emailRegister = async (req, res) => {
   try {
-    const email = req.body.email;
+    const { email } = req.body;
 
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    const existingEmail = await Student.findOne({ email });
+    // Check if email exists and generate OTP in parallel
+    const [existingEmail, otpCode] = await Promise.all([
+      Student.findOne({ email }).lean(), // use lean for faster retrieval
+      Promise.resolve(Math.floor(100000 + Math.random() * 900000).toString())
+    ]);
+
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
     }
 
-    // Generate a 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 20 * 60 * 1000; // 20 minutes expiry timestamp
+    const expiresAt = Date.now() + 20 * 60 * 1000; // 20 mins expiry
 
-    // Send OTP via email
-    await sendOtpEmail(email, otpCode);
+    // Send OTP but don't wait for it to complete before responding
+    sendOtpEmail(email, otpCode).catch(err => {
+      console.error("OTP email failed:", err.message);
+    });
 
-    // Send OTP and expiry timestamp back to client (to be stored in localStorage)
+    // Respond immediately
     return res.status(200).json({
       message: "OTP sent to email",
       otp: otpCode,
@@ -99,9 +103,6 @@ export const emailRegister = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
-
 
 
 

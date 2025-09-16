@@ -1,5 +1,5 @@
 import express from "express";
-import { checkAnswerById, createPraticePlan, createRandomQuestions, getMissedQuestions, getPracticePlanQuestions, getQuestionBySectionAndIndex, getRandomQuestion } from "../Controller/PracticeplanController.js";
+import { checkAnswerById, createMissedQuestions, createPraticePlan, createRandomQuestions, getPracticePlanQuestions, getQuestionBySectionAndIndex, getRandomQuestion } from "../Controller/PracticeplanController.js";
 
 
 
@@ -11,6 +11,6 @@ router.get('/GetPracticePlanQuestions/:planId', getPracticePlanQuestions)
 router.get('/GetQuestion/:planId/:section/:questionIndex', getQuestionBySectionAndIndex)
 router.post('/CreateRandomQuestions', createRandomQuestions)
 router.post('/GetRandomQuestions', getRandomQuestion)
-router.post('/GetMissedQuestions', getMissedQuestions)
+router.post('/CreateMissedQuestions', createMissedQuestions)
 
 export default router;
