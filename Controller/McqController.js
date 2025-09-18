@@ -3,6 +3,7 @@ import cloudinary from '../Utils/Cloudinary.js';
 import MockQuestions from "../Models/MockQuestionModel.js";
 import FlaggedQuestion from "../Models/FlaggedquestionsModel.js";
 import TimeQuestions from "../Models/TimeQuestionModel.js";
+import mongoose from "mongoose";
 
 
 export const createTwelfthQuestion = async (req, res) => {
@@ -114,6 +115,94 @@ export const createBulkTwelfthQuestions = async (req, res) => {
 };
 
 
+export const checkMockAnswerById = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+
+    console.log("question", req.params);
+
+    const { userAnswer, userId } = req.body;
+
+    console.log("body", req.body);
+
+
+    if (!questionId || !userAnswer || !userId) {
+      return res.status(400).json({
+        message: "questionId, userAnswer and userId are required",
+      });
+    }
+
+    // Find the question details
+    const question = await twelve.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    console.log("question", question);
+
+
+    // Check correctness
+    const isCorrect =
+      question.correctAnswer.trim().toLowerCase() ===
+      userAnswer.trim().toLowerCase();
+
+    // Find the active mock quiz
+    const quiz = await MockQuestions.findOne({ userId, isActive: true });
+    if (!quiz) {
+      return res.status(404).json({ message: "Active quiz not found" });
+    }
+
+    // Update the question status in the quiz
+    const idx = quiz.questions.findIndex(
+      (q) => q.questionId.toString() === questionId.toString()
+    );
+    if (idx === -1) {
+      return res.status(404).json({ message: "Question not found in quiz" });
+    }
+
+    // Update question details
+    quiz.questions[idx].status = isCorrect ? "correct" : "incorrect";
+    quiz.questions[idx].attempts += 1;
+    quiz.questions[idx].answeredAt = new Date();
+
+    // Update progress
+    quiz.progress.completedQuestions += 1;
+    if (isCorrect) quiz.progress.correctAnswers += 1;
+    else quiz.progress.wrongAnswers += 1;
+
+    // Move current question to next one
+    let nextIndex = idx + 1;
+    if (nextIndex >= quiz.questions.length) {
+      // All done
+      quiz.progress.status = "completed";
+      quiz.isActive = false;
+      quiz.currentQuestion = { index: nextIndex, questionId: null };
+    } else {
+      quiz.progress.status = "in_progress";
+      quiz.currentQuestion = {
+        index: nextIndex,
+        questionId: quiz.questions[nextIndex].questionId,
+      };
+    }
+
+    await quiz.save();
+
+    return res.status(200).json({
+      message: "Answer checked and quiz updated",
+      questionId: question._id,
+      userAnswer,
+      isCorrect,
+      correctAnswer: isCorrect ? undefined : question.correctAnswer,
+      progress: quiz.progress,
+      currentQuestion: quiz.currentQuestion,
+    });
+  } catch (error) {
+    console.error("Error in checkMockAnswerById:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 export const MockBattle = async (req, res) => {
   try {
     let { StudentId, Standard, syllabus, Subject, FrequentlyAsked, ExamSimulation, topic } = req.body;
@@ -125,8 +214,12 @@ export const MockBattle = async (req, res) => {
     ExamSimulation = ExamSimulation === "true" || ExamSimulation === true;
 
     // Validate input
-    if (!StudentId || !Subject || !Standard || !syllabus || !topic || !Array.isArray(topic)) {
+    if (!StudentId || !Subject || !Standard || !syllabus || !topic || !Array.isArray(topic) || topic.length === 0) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
+    }
+    const existingCount = await MockQuestions.countDocuments({ userId: StudentId, subject: Subject, isActive: true });
+    if (existingCount > 0) {
+      return res.status(400).json({ message: "You already have an active mock quiz. Please complete it before starting a new one." });
     }
 
     // Build the match condition
@@ -140,13 +233,10 @@ export const MockBattle = async (req, res) => {
     if (FrequentlyAsked) {
       matchCondition.FrequentlyAsked = true; // Add filter only if FrequentlyAsked is true
     }
-    // If FrequentlyAsked is false or not specified, do not add this filter
 
-    // Aggregation pipeline
+    // Aggregation pipeline to group questions by topic
     const questionsByTopic = await twelve.aggregate([
-      {
-        $match: matchCondition
-      },
+      { $match: matchCondition },
       {
         $group: {
           _id: "$topic",
@@ -156,7 +246,7 @@ export const MockBattle = async (req, res) => {
       {
         $project: {
           topic: "$_id",
-          questions: { $slice: ["$questions", 10] }, // Limit to 50 questions per topic
+          questions: { $slice: ["$questions", 10] }, // Limit to 10 questions per topic
           _id: 0
         }
       }
@@ -174,31 +264,44 @@ export const MockBattle = async (req, res) => {
 
     const totalTime = quizTopics.length * 30;
 
-    // Save the mock quiz instance
+    // ✅ Create a new mock quiz regardless of existing active sessions
     const mockQuiz = await MockQuestions.create({
       userId: StudentId,
       subject: Subject,
-      Standard: Standard,   // Added Standard here
+      Standard: Standard,
       syllabus: syllabus,
       FrequentlyAsked: FrequentlyAsked,
       ExamSimulation: ExamSimulation,
       timeLimit: totalTime,
-      questions: quizTopics.flatMap((topic, topicIndex) =>
-        topic.questions.map((question, index) => ({
+      isActive: true,
+      questions: quizTopics.flatMap((topicObj, topicIndex) =>
+        topicObj.questions.map((question, index) => ({
           questionId: question._id,
           index: index,
+          topic: topicObj.topic,
           status: "pending",
           answeredAt: null,
           attempts: 0
         }))
-      )
+      ),
     });
+
+    // Initialize currentQuestion to the first question if available
+    if (mockQuiz.questions.length > 0) {
+      mockQuiz.currentQuestion = {
+        index: 0,
+        questionId: mockQuiz.questions[0].questionId,
+      };
+      mockQuiz.progress.status = "in_progress";
+      await mockQuiz.save();
+    }
+
 
     return res.status(200).json({
       message: "Mock quiz generated successfully.",
       quizId: mockQuiz._id,
       totalTime: totalTime,
-      topic: quizTopics
+      topics: quizTopics
     });
 
   } catch (error) {
@@ -208,47 +311,142 @@ export const MockBattle = async (req, res) => {
 };
 
 
+export const getMockQuestions = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { subject } = req.body;
+
+    if (!subject) {
+      return res.status(400).json({ message: "Subject is required" });
+    }
+
+    // Find the active mock quiz for the user and subject
+    const quiz = await MockQuestions.findOne({ userId, subject, isActive: true });
+    if (!quiz) {
+      return res.status(404).json({ message: "Active mock quiz not found for this subject" });
+    }
+
+    // Load full question documents
+    const allIds = quiz.questions.map((q) => q.questionId);
+    const fullQuestions = await twelve
+      .find({ _id: { $in: allIds } })
+      .select("_id question options correctAnswer");
+
+    const getById = (id) => fullQuestions.find((q) => q._id.toString() === id.toString());
+
+    // Map questions with details
+    const mappedQuestions = quiz.questions.map((q) => {
+      const details = getById(q.questionId);
+      return {
+        index: q.index,
+        status: q.status,
+        answeredAt: q.answeredAt,
+        attempts: q.attempts,
+        question: details?.question || "",
+        options: details?.options || [],
+        correctAnswer: details?.correctAnswer || "",
+      };
+    });
+
+    // Get current question details if available
+    let currentQuestion = null;
+    if (quiz.currentQuestion && quiz.currentQuestion.questionId) {
+      const cur = getById(quiz.currentQuestion.questionId);
+      if (cur) {
+        currentQuestion = {
+          index: quiz.currentQuestion.index,
+          question: cur.question,
+          options: cur.options,
+          correctAnswer: cur.correctAnswer,
+        };
+      }
+    }
+
+    res.status(200).json({
+      message: "Mock quiz retrieved successfully",
+      quizId: quiz._id,
+      subject: quiz.subject,
+      timeLimit: quiz.timeLimit,
+      progress: quiz.progress,
+      questions: mappedQuestions,
+      currentQuestion,
+    });
+  } catch (error) {
+    console.error("Error in getMockQuestions:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
 export const flagQuestion = async (req, res) => {
   try {
-    const { userId, questionId } = req.body;
+    const { userId, courseId, questionId } = req.body;
 
     // Validate input
-    if (!userId || !questionId) {
+    if (!userId || !questionId || !courseId) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
     }
 
-    // Convert questionId to ObjectId
+    // Convert IDs to ObjectId
     const questionObjectId = new mongoose.Types.ObjectId(questionId);
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
 
-    // Find if a flagged question document exists for this user and subject
+    // Find if a flagged question document exists for this user
     let flaggedDoc = await FlaggedQuestion.findOne({ userId });
 
     if (!flaggedDoc) {
-      // Create new flagged question document
+      // Create new flagged question document with currentQuestion set to this question
       flaggedDoc = new FlaggedQuestion({
         userId,
         questions: [{
           questionId: questionObjectId,
+          courseId: courseObjectId,
           index: 0,
           status: "pending",
           answeredAt: null,
           attempts: 0
-        }]
+        }],
+        currentQuestion: {
+          index: 0,
+          questionId: questionObjectId
+        },
+        progress: {
+          completedQuestions: 0,
+          correctAnswers: 0,
+          wrongAnswers: 0,
+          status: "not_started"
+        },
+        isActive: true
       });
     } else {
-      // Check if the question already exists in the array
-      const exists = flaggedDoc.questions.some(q => q.questionId.equals(questionObjectId));
+      // Check if the question already exists
+      const exists = flaggedDoc.questions.some(q =>
+        q.questionId.equals(questionObjectId) &&
+        q.courseId.equals(courseObjectId)
+      );
+
       if (exists) {
         return res.status(200).json({ message: "Question already flagged.", flaggedQuestion: flaggedDoc });
       }
-      // Add new question
+
+      // Add new question with courseId
       flaggedDoc.questions.push({
         questionId: questionObjectId,
+        courseId: courseObjectId,
         index: flaggedDoc.questions.length,
         status: "pending",
         answeredAt: null,
         attempts: 0
       });
+
+      // If this is the first question added (i.e., it was empty before), set currentQuestion
+      if (flaggedDoc.questions.length === 1) {
+        flaggedDoc.currentQuestion = {
+          index: 0,
+          questionId: questionObjectId
+        };
+      }
     }
 
     // Save the document
@@ -262,6 +460,148 @@ export const flagQuestion = async (req, res) => {
   } catch (error) {
     console.error("flagQuestion error:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const checkFlaggedAnswerById = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { userAnswer, userId } = req.body;
+
+    if (!questionId || !userAnswer || !userId) {
+      return res.status(400).json({ message: "questionId, userAnswer and userId are required" });
+    }
+
+    // Fetch question
+    const question = await twelve.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    const isCorrect = question.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
+
+    // Find active flagged document
+    const flaggedDoc = await FlaggedQuestion.findOne({ userId, isActive: true });
+    if (!flaggedDoc) {
+      return res.status(404).json({ message: "Active flagged session not found" });
+    }
+
+    // Find the question in flaggedDoc
+    const idx = flaggedDoc.questions.findIndex(q => q.questionId.toString() === questionId.toString());
+    if (idx === -1) {
+      return res.status(404).json({ message: "Question not found in flagged questions" });
+    }
+
+    // Update question status
+    flaggedDoc.questions[idx].status = isCorrect ? "correct" : "incorrect";
+    flaggedDoc.questions[idx].attempts += 1;
+    flaggedDoc.questions[idx].answeredAt = new Date();
+
+    // Update progress
+    flaggedDoc.progress.completedQuestions += 1;
+    if (isCorrect) flaggedDoc.progress.correctAnswers += 1;
+    else flaggedDoc.progress.wrongAnswers += 1;
+    flaggedDoc.progress.status = "in_progress";
+
+    // Move currentQuestion to the next unanswered question if exists
+    const nextQuestion = flaggedDoc.questions.find(q => q.status === "pending");
+    if (nextQuestion) {
+      flaggedDoc.currentQuestion = {
+        index: nextQuestion.index,
+        questionId: nextQuestion.questionId
+      };
+    } else {
+      // All questions answered
+      flaggedDoc.currentQuestion = { index: 0, questionId: null };
+      flaggedDoc.progress.status = "completed";
+      flaggedDoc.isActive = false;
+    }
+
+    await flaggedDoc.save();
+
+    res.status(200).json({
+      message: "Answer checked and flagged session updated",
+      questionId: question._id,
+      userAnswer,
+      isCorrect,
+      correctAnswer: isCorrect ? undefined : question.correctAnswer,
+      progress: flaggedDoc.progress,
+      currentQuestion: flaggedDoc.currentQuestion,
+    });
+
+  } catch (error) {
+    console.error("Error in checkFlaggedAnswerById:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const getAllFlaggedQuestions = async (req, res) => {
+  try {
+    const { userId, subject } = req.body;
+
+    if (!subject) {
+      return res.status(400).json({ message: "Subject is required" });
+    }
+
+    // Find the active flagged questions document for the user
+    const flaggedDoc = await FlaggedQuestion.findOne({ userId, isActive: true });
+
+    if (!flaggedDoc || flaggedDoc.questions.length === 0) {
+      return res.status(404).json({ message: "No flagged questions found" });
+    }
+
+    // Filter questions by subject
+    const questionIds = flaggedDoc.questions.map(q => q.questionId);
+
+    const questions = await twelve.find({ _id: { $in: questionIds }, subject })
+      .select("_id question options correctAnswer");
+
+    if (!questions.length) {
+      return res.status(404).json({ message: "No flagged questions found for this subject" });
+    }
+
+    // Map flagged questions with details
+    const mappedQuestions = flaggedDoc.questions.map(q => {
+      const details = questions.find(detail => detail._id.toString() === q.questionId.toString());
+      if (!details) return null;
+      return {
+        index: q.index,
+        questionId: q.questionId,
+        question: details.question,
+        options: details.options,
+        correctAnswer: details.correctAnswer,
+        status: q.status,
+        answeredAt: q.answeredAt,
+        attempts: q.attempts,
+        courseId: q.courseId,
+      };
+    }).filter(q => q !== null);
+
+    // Get current question details if available
+    let currentQuestion = null;
+    if (flaggedDoc.currentQuestion && flaggedDoc.currentQuestion.questionId) {
+      const cur = questions.find(q => q._id.toString() === flaggedDoc.currentQuestion.questionId.toString());
+      if (cur) {
+        currentQuestion = {
+          index: flaggedDoc.currentQuestion.index,
+          questionId: cur._id,
+          question: cur.question,
+          options: cur.options,
+          correctAnswer: cur.correctAnswer,
+        };
+      }
+    }
+
+    res.status(200).json({
+      message: "Flagged questions retrieved successfully",
+      questions: mappedQuestions,
+      currentQuestion,
+      progress: flaggedDoc.progress,
+    });
+  } catch (error) {
+    console.error("Error in getAllFlaggedQuestions:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
@@ -341,6 +681,179 @@ export const createTimeQuiz = async (req, res) => {
     return res.status(500).json({ message: "Server error", error });
   }
 };
+
+
+export const checkTimeAnswerById = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { userAnswer, userId } = req.body;
+
+    if (!questionId || !userAnswer || !userId) {
+      return res.status(400).json({ message: "questionId, userAnswer and userId are required" });
+    }
+
+    const quiz = await TimeQuestions.findOne({ userId, isActive: true });
+    if (!quiz) {
+      return res.status(404).json({ message: "Active timed quiz not found" });
+    }
+
+    const section = quiz.sections[quiz.currentQuestion.sectionIndex];
+    if (!section) {
+      return res.status(404).json({ message: "Section not found" });
+    }
+
+    const question = section.questions[quiz.currentQuestion.questionIndex];
+    if (!question || question.questionId.toString() !== questionId) {
+      return res.status(404).json({ message: "Question not found in current quiz" });
+    }
+
+    const fullQuestion = await twelve.findById(questionId).select("_id question options correctAnswer");
+    if (!fullQuestion) {
+      return res.status(404).json({ message: "Question details not found" });
+    }
+
+    const isCorrect = fullQuestion.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
+
+    // Check wrong answers limit
+    if (!isCorrect && quiz.progress.wrongAnswers >= quiz.WrongQuestionsLimit) {
+      return res.status(400).json({ message: "Wrong answers limit exceeded" });
+    }
+
+    // Update question status
+    question.status = isCorrect ? "correct" : "incorrect";
+    question.attempts += 1;
+    question.answeredAt = new Date();
+
+    // Update progress
+    quiz.progress.completedQuestions += 1;
+    if (isCorrect) quiz.progress.correctAnswers += 1;
+    else quiz.progress.wrongAnswers += 1;
+
+    // Move to next question or complete quiz
+    let nextSectionIndex = quiz.currentQuestion.sectionIndex;
+    let nextQuestionIndex = quiz.currentQuestion.questionIndex + 1;
+
+    if (nextQuestionIndex >= section.questions.length) {
+      nextSectionIndex += 1;
+      nextQuestionIndex = 0;
+    }
+
+    if (nextSectionIndex >= quiz.sections.length) {
+      // All completed
+      quiz.progress.status = "completed";
+      quiz.isActive = false;
+      quiz.currentQuestion = { sectionIndex: 0, questionIndex: 0 };
+    } else {
+      quiz.progress.status = "in_progress";
+      quiz.currentQuestion = {
+        sectionIndex: nextSectionIndex,
+        questionIndex: nextQuestionIndex,
+      };
+    }
+
+    await quiz.save();
+
+    return res.status(200).json({
+      message: "Answer checked successfully",
+      questionId: fullQuestion._id,
+      userAnswer,
+      isCorrect,
+      correctAnswer: isCorrect ? undefined : fullQuestion.correctAnswer,
+      progress: quiz.progress,
+      currentQuestion: quiz.isActive
+        ? quiz.sections[quiz.currentQuestion.sectionIndex].questions[quiz.currentQuestion.questionIndex]
+        : null,
+    });
+
+  } catch (error) {
+    console.error("Error in checkTimeAnswerById:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
+
+export const getTimedQuiz = async (req, res) => {
+  try {
+    const { userId, subject } = req.body;
+
+    if (!subject) {
+      return res.status(400).json({ message: "Subject is required" });
+    }
+
+    // ✅ Find the existing quiz
+    const existingQuiz = await TimeQuestions.findOne({
+      userId,
+      subject,
+      isActive: true,
+    });
+
+    if (!existingQuiz) {
+      return res.status(404).json({ message: "No active quiz found" });
+    }
+
+    // ✅ Collect all question IDs from all sections
+    const allQuestionIds = [];
+    existingQuiz.sections.forEach((section) => {
+      section.questions.forEach((q) => {
+        allQuestionIds.push(q.questionId);
+      });
+    });
+
+    // ✅ Fetch question details
+    const fullQuestions = await twelve
+      .find({ _id: { $in: allQuestionIds } })
+      .select("_id question options correctAnswer");
+
+    // ✅ Map questions with full details
+    const mapQuestions = (section) =>
+      section.questions.map((q) => {
+        const details = fullQuestions.find(
+          (fq) => fq._id.toString() === q.questionId.toString()
+        );
+        return {
+          ...q.toObject(),
+          question: details?.question,
+          options: details?.options,
+          correctAnswer: details?.correctAnswer,
+        };
+      });
+
+    // ✅ Map each section
+    const mappedSections = existingQuiz.sections.map((section) => ({
+      questions: mapQuestions(section),
+    }));
+
+    // ✅ Map current question
+    const section = existingQuiz.sections[existingQuiz.currentQuestion.sectionIndex];
+    const currentQ = section.questions[existingQuiz.currentQuestion.questionIndex];
+    const currentDetails = fullQuestions.find(
+      (fq) => fq._id.toString() === currentQ.questionId.toString()
+    );
+    const mappedCurrent = {
+      ...currentQ.toObject(),
+      question: currentDetails?.question,
+      options: currentDetails?.options,
+      correctAnswer: currentDetails?.correctAnswer,
+    };
+
+    // ✅ Send the full mapped response
+    return res.status(200).json({
+      message: "Timed quiz retrieved successfully",
+      quizId: existingQuiz._id,
+      subject: existingQuiz.subject,
+      sections: mappedSections,
+      currentQuestion: mappedCurrent,
+      progress: existingQuiz.progress,
+    });
+
+  } catch (error) {
+    console.error("Error retrieving timed quiz:", error);
+    return res.status(500).json({ message: "Internal server error", error });
+  }
+};
+
 
 
 export const submitTimeAnswer = async (req, res) => {

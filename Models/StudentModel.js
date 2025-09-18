@@ -1,6 +1,4 @@
-
 import mongoose from "mongoose";
-
 
 const studentSchema = new mongoose.Schema(
   {
@@ -21,68 +19,35 @@ const studentSchema = new mongoose.Schema(
     },
     countryCode: {
       type: String,
-      // required: true,
       trim: true,
     },
     phoneNumber: {
       type: String,
-      // required: true,
     },
-    // parentFirstName: {
-    //   type: String,
-    //   required: true,
-    //   trim: true,
-    // },
-    //    parentMiddleName: {
-    //   type: String,
-    //   trim: true,
-    // },
-    // parentLastName: {
-    //   type: String,
-    //   required: true,
-    //   trim: true,
-    // },
-    // parentEmail: {
-    //   type: String,
-    //   required: true,
-    //   lowercase: true,
-    //   trim: true,
-    // },
-    // parentId: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Parent",
-    //   default: null,
-    // },
     praticeMode: {
       type: String,
       enum: ["Getting Started", "On My Way", "Confident", "Pro Level"],
     },
-
     schoolName: {
       type: String,
-      // required: true,
       trim: true,
     },
     country: {
       type: String,
-      // required: true,
       trim: true,
     },
     dateofBirth: {
       type: String,
-      // required: true,
     },
     Gender: {
       type: String,
     },
     Nationality: {
       type: String,
-      // required: true,
       trim: true,
     },
     state: {
       type: String,
-      // required: true,
       trim: true,
     },
     classStandard: {
@@ -93,10 +58,6 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    // isParentLinked: {
-    //   type: Boolean,
-    //   default: false,
-    // },
     leadSource: {
       type: String,
       default: null,
@@ -105,10 +66,11 @@ const studentSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    lastLoginDate: Date,
+    lastLoginDate: {
+      type: Date,
+    },
     referralCode: {
       type: String,
-      // unique: true,
     },
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -125,10 +87,13 @@ const studentSchema = new mongoose.Schema(
         questionCount: { type: String },
         preferredStudyTime: { type: String },
         preferredQuizDays: [{ type: String }],
-        examDate: { type: String }
+        examDate: { type: String },
       }
-    ]
-
+    ],
+    onBoarding: {
+      type: String,
+      default: "Not Started",
+    }
   },
   { timestamps: true }
 );

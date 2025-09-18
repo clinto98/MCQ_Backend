@@ -125,6 +125,7 @@ export const studentSignup = async (req, res) => {
       syllabus,
       leadSource,
       leadOwner,
+      onBoarding
     } = req.body;
 
 
@@ -216,6 +217,7 @@ export const studentSignup = async (req, res) => {
       syllabus,
       leadSource,
       leadOwner,
+      onBoarding
     });
 
     await newStudent.save();
@@ -230,6 +232,7 @@ export const studentSignup = async (req, res) => {
         schoolName: newStudent.schoolName,
         country: newStudent.country,
         state: newStudent.state,
+        onBoarding: newStudent.onBoarding
       },
     });
   } catch (error) {
@@ -242,7 +245,7 @@ export const studentSignup = async (req, res) => {
 export const updateStudentStandard = async (req, res) => {
   try {
     const { studentId } = req.params; // Student ID comes from route params
-    const { classStandard } = req.body; // New class standard from request body
+    const { classStandard , onBoarding } = req.body; // New class standard from request body
 
     if (!classStandard) {
       return res.status(400).json({ message: "classStandard is required" });
@@ -256,6 +259,7 @@ export const updateStudentStandard = async (req, res) => {
 
     // 🔹 Update standard
     student.classStandard = classStandard;
+    student.onBoarding = onBoarding || student.onBoarding; // Update onBoarding if provided
     await student.save();
 
     return res.status(200).json({
@@ -266,6 +270,7 @@ export const updateStudentStandard = async (req, res) => {
         LastName: student.LastName,
         email: student.email,
         classStandard: student.classStandard,
+        onBoarding: student.onBoarding
       },
     });
   } catch (error) {
@@ -418,7 +423,8 @@ export const updateUserPreferences = async (req, res) => {
       questionCount,
       preferredStudyTime,
       preferredQuizDays,
-      examDate
+      examDate,
+      onBoarding
     } = req.body;
 
     // Validate studentId
@@ -454,11 +460,13 @@ export const updateUserPreferences = async (req, res) => {
 
     // Add the new preference to the array
     student.userPreferences.push(newPreference);
+    student.onBoarding = onBoarding || student.onBoarding; // Update onBoarding if provided
     await student.save();
 
     return res.status(200).json({
       message: "User preferences updated successfully.",
-      userPreferences: student.userPreferences
+      userPreferences: student.userPreferences,
+      OnBoarding: student.onBoarding
     });
   } catch (error) {
     console.error("Error updating user preferences:", error);

@@ -21,3 +21,4 @@ router.get("/topics", getAvailableTopics);
 router.get("/previous-years", getAvailablePreviousYears);
 
 export default router;
+

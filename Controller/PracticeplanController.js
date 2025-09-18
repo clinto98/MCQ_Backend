@@ -382,6 +382,7 @@ export const getRandomQuestion = async (req, res) => {
 
       return res.status(200).json({
         message: "Resuming previous session",
+        existingSessionId: existingSession._id,
         subject,
         Section1: mapWithDetails(existingSession.Section1),
         Section2: mapWithDetails(existingSession.Section2),
@@ -473,7 +474,7 @@ export const createMissedQuestions = async (req, res) => {
       return res.status(400).json({ message: "Request body is missing" });
     }
     const { userId, subject } = req.body;
-    
+
     if (!userId || !subject) {
       return res.status(400).json({ message: "User ID and subject are required" });
     }
@@ -486,8 +487,8 @@ export const createMissedQuestions = async (req, res) => {
     for (const Model of models) {
       const sessions = await Model.find({ userId, subject, isActive: true });
 
-      console.log("data",sessions);
-      
+      console.log("data", sessions);
+
 
       for (const session of sessions) {
         const sections = ["Section1", "Section2", "Section3"];
@@ -549,6 +550,188 @@ export const createMissedQuestions = async (req, res) => {
   }
 };
 
+
+export const getMissedQuestions = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { subject } = req.body;
+
+    if (!subject) {
+      return res.status(400).json({ message: "Subject is required" });
+    }
+
+    // Find the session for this user and subject that is active
+    const session = await MissedQuestions.findOne({ userId, subject, isActive: true });
+
+    if (!session) {
+      return res.status(404).json({ message: "No missed questions session found for this subject" });
+    }
+
+    const normalizeOptions = (options) =>
+      options.map((opt) => {
+        if (typeof opt === "string") return { text: opt };
+        if (opt && typeof opt === "object") {
+          if (opt.text && String(opt.text).trim() !== "") return { text: String(opt.text).trim() };
+          if (opt.diagramUrl && String(opt.diagramUrl).trim() !== "") return { diagramUrl: String(opt.diagramUrl).trim() };
+          // Fallback: concatenate any string-like values (handles shapes like {A:".."})
+          const stringValues = Object.entries(opt)
+            .filter(([key, value]) =>
+              !["_id", "id", "__v"].includes(key) && typeof value === "string" && value.trim() !== ""
+            )
+            .map(([, value]) => value.trim());
+          if (stringValues.length > 0) {
+            return { text: stringValues.join(" ") };
+          }
+          // Fallback: numeric-key join (e.g., {0:"a",1:"b"})
+          const joined = Object.keys(opt)
+            .filter((k) => !isNaN(k))
+            .sort((a, b) => a - b)
+            .map((k) => String(opt[k]).trim())
+            .filter((v) => v !== "")
+            .join(" ");
+          if (joined) return { text: joined };
+        }
+        return { text: "" };
+      });
+
+    // Load full question docs for all missed question IDs
+    const allIds = session.questions.map((q) => q.questionId);
+    const fullQuestions = await twelve
+      .find({ _id: { $in: allIds } })
+      .select("_id question options correctAnswer");
+
+    const getById = (id) => fullQuestions.find((fq) => fq._id.toString() === String(id));
+
+    const mapQuestions = (questionsArray) =>
+      questionsArray.map((q) => {
+        const details = getById(q.questionId);
+        return {
+          index: q.index,
+          status: q.status,
+          answeredAt: q.answeredAt,
+          attempts: q.attempts,
+          question: details?.question || "",
+          options: normalizeOptions(details?.options || []),
+          correctAnswer: details?.correctAnswer || "",
+        };
+      });
+
+    // Resolve currentQuestion
+    let currentQuestion = null;
+    if (session.currentQuestion?.questionId) {
+      const cur = getById(session.currentQuestion.questionId);
+      currentQuestion = cur
+        ? {
+            index: session.currentQuestion.index,
+            question: cur.question,
+            options: normalizeOptions(cur.options || []),
+            correctAnswer: cur.correctAnswer,
+          }
+        : null;
+    }
+
+    res.status(200).json({
+      message: "Missed questions retrieved",
+      subject: session.subject,
+      questions: mapQuestions(session.questions),
+      currentQuestion,
+      progress: session.progress,
+    });
+
+  } catch (error) {
+    console.error("Error fetching missed questions:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const checkMissedAnswer = async (req, res) => {
+  try {
+    const questionId = req.params.id;
+    const { userAnswer, userId } = req.body;
+
+    if (!questionId || !userAnswer || !userId) {
+      return res.status(400).json({
+        message: "questionId, userAnswer and userId are required",
+      });
+    }
+
+    // Fetch question
+    const question = await twelve.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    const isCorrect =
+      question.correctAnswer.trim().toLowerCase() ===
+      userAnswer.trim().toLowerCase();
+
+    // Find active missed questions session
+    const session = await MissedQuestions.findOne({ userId, isActive: true });
+    if (!session) {
+      return res.status(404).json({ message: "Active missed questions session not found" });
+    }
+
+    // Find and update the question
+    const index = session.questions.findIndex(
+      (q) => q.questionId.toString() === questionId.toString()
+    );
+
+    if (index === -1) {
+      return res.status(404).json({
+        message: "Question not found in missed questions session",
+      });
+    }
+
+    session.questions[index].attempts += 1;
+    session.questions[index].answeredAt = new Date();
+    session.questions[index].status = isCorrect ? "correct" : "incorrect";
+
+    // Update progress
+    session.progress.completedQuestions += 1;
+    if (isCorrect) {
+      session.progress.correctAnswers += 1;
+    } else {
+      session.progress.wrongAnswers += 1;
+    }
+
+    // Update status if all questions answered
+    const allAnswered = session.questions.every((q) => q.answeredAt);
+    if (allAnswered) {
+      session.progress.status = "completed";
+      session.isActive = false;
+    } else {
+      session.progress.status = "in_progress";
+    }
+
+    // Move currentQuestion if not completed
+    if (!allAnswered) {
+      const nextQuestion = session.questions.find((q) => !q.answeredAt);
+      if (nextQuestion) {
+        session.currentQuestion = {
+          index: nextQuestion.index,
+          questionId: nextQuestion.questionId,
+        };
+      }
+    }
+
+    await session.save();
+
+    res.status(200).json({
+      message: "Answer checked and session updated",
+      questionId: question._id,
+      userAnswer,
+      isCorrect,
+      correctAnswer: isCorrect ? undefined : question.correctAnswer,
+      progress: session.progress,
+      currentQuestion: session.currentQuestion,
+    });
+  } catch (error) {
+    console.error("Error checking missed answer:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 export const createRandomQuestions = async (req, res) => {
   try {
     const { userId, subject } = req.body;
@@ -567,7 +750,7 @@ export const createRandomQuestions = async (req, res) => {
     if (existingActiveSession) {
       return res.status(400).json({
         message: "An active session already exists for this subject. Please complete it before starting a new one.",
-        existingActiveSession
+        sessionId: existingActiveSession._id,
       });
     }
 
