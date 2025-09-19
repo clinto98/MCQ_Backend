@@ -1,14 +1,10 @@
 import twelve from "../Models/McqModel.js";
 import RandomQuestions from '../Models/RandomquestionsModel.js';
-import MissedQuestions from '../Models/MissedquestionsModel.js';
 import FlaggedQuestion from "../Models/FlaggedquestionsModel.js";
-import PreviousQuestionPaper from "../Models/QuestionPaperModel.js";
+import PreviousQuestionPaper from "../Models/QuestionPaperModel.js"
+import PersonalizedPracticePlan from "../Models/PersonalizedPraticePlanModel.js";
 
-/**
- * Generate personalized MCQ questions based on multiple criteria
- * Supports: topics, previous year questions, difficulty, exam simulation,
- * attempted questions filtering (correct/incorrect/flagged), and question count configuration
- */
+
 export const generatePersonalizedMcq = async (req, res) => {
   try {
     const {
@@ -16,21 +12,21 @@ export const generatePersonalizedMcq = async (req, res) => {
       subject,
       syllabus = "CBSE",
       standard = "12",
-      
+
       // Topic filtering
       selectedTopics = [],
-      
+
       // Previous year questions
       includePreviousYear = false,
       previousYearYears = [],
-      
+
       // Difficulty filtering
       difficultyLevels = ["easy", "medium", "hard"],
-      
+
       // Exam simulation mode
       examSimulationMode = false,
       examDuration = 180, // minutes
-      
+
       // Attempted questions filtering
       includeAttemptedQuestions = false,
       attemptedFilter = {
@@ -38,7 +34,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         incorrect: false,
         flagged: false
       },
-      
+
       // Question count configuration
       totalQuestions = 30,
       questionDistribution = {
@@ -63,7 +59,7 @@ export const generatePersonalizedMcq = async (req, res) => {
     }
 
     console.log("Generating personalized MCQ with criteria:", {
-      userId, subject, selectedTopics, includePreviousYear, 
+      userId, subject, selectedTopics, includePreviousYear,
       previousYearYears, difficultyLevels, examSimulationMode,
       includeAttemptedQuestions, attemptedFilter, totalQuestions
     });
@@ -87,7 +83,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         difficultyLevels,
         count: topicQuestions
       });
-      
+
       allQuestions = [...allQuestions, ...topicQuestionsData];
       questionSources.push({
         source: "topics",
@@ -106,7 +102,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         difficultyLevels,
         count: previousYearQuestions
       });
-      
+
       allQuestions = [...allQuestions, ...previousYearData];
       questionSources.push({
         source: "previousYear",
@@ -123,7 +119,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         attemptedFilter,
         count: attemptedQuestions
       });
-      
+
       allQuestions = [...allQuestions, ...attemptedData];
       questionSources.push({
         source: "attempted",
@@ -142,7 +138,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         excludeIds: allQuestions.map(q => q._id),
         count: randomQuestions
       });
-      
+
       allQuestions = [...allQuestions, ...randomData];
       questionSources.push({
         source: "random",
@@ -175,6 +171,44 @@ export const generatePersonalizedMcq = async (req, res) => {
       questionSources
     });
 
+
+
+    const normalizeOptions = (options) =>
+      options.map((opt) => {
+        if (!opt) return { text: "" };
+        if (typeof opt === "string") return { text: opt };
+
+        if (typeof opt === "object") {
+          const plain = typeof opt.toObject === "function" ? opt.toObject() : opt;
+          if (plain.text && String(plain.text).trim() !== "") {
+            return { text: String(plain.text).trim(), diagramUrl: plain.diagramUrl || null };
+          }
+          if (plain.diagramUrl && !plain.text) return { text: "", diagramUrl: String(plain.diagramUrl) };
+
+          // Prefer concatenation of numeric keys in order
+          const joinedNumeric = Object.keys(plain)
+            .filter((k) => !isNaN(k))
+            .sort((a, b) => a - b)
+            .map((k) => String(plain[k] ?? "")).join("");
+          const trimmedNumeric = joinedNumeric.trim();
+
+          if (trimmedNumeric !== "") return { text: joinedNumeric };
+
+          // Fallback: concat any other string fields (excluding meta keys)
+          const stringValues = Object.entries(plain)
+            .filter(([key, value]) => !["_id", "id", "__v", "diagramUrl"].includes(key) && typeof value === "string")
+            .map(([, value]) => value)
+            .join(" ")
+            .trim();
+          if (stringValues !== "") return { text: stringValues };
+
+          return { text: "" };
+        }
+
+        return { text: "" };
+      });
+
+
     return res.status(200).json({
       message: "Personalized MCQ generated successfully",
       sessionId: personalizedSession._id,
@@ -185,7 +219,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         questionId: q._id,
         questionNumber: index + 1,
         question: q.question,
-        options: q.options,
+        options: normalizeOptions(q.options || []),
         difficulty: q.difficulty,
         topic: q.topic,
         source: q.source || "mixed"
@@ -393,53 +427,65 @@ const fetchRandomQuestions = async ({ subject, syllabus, standard, difficultyLev
 /**
  * Create personalized session
  */
-const createPersonalizedSession = async ({ userId, subject, questions, examConfig, questionSources }) => {
+const createPersonalizedSession = async ({
+  userId,
+  subject,
+  questions,
+  examConfig,
+  questionSources,
+  syllabus,
+  standard,
+}) => {
   try {
     // Deactivate any existing sessions for this user
-    await RandomQuestions.updateMany(
+    await PersonalizedPracticePlan.updateMany(
       { userId, isActive: true },
       { isActive: false }
     );
 
-    // Create new session
-    const session = new RandomQuestions({
+    // Create new personalized session
+    const session = new PersonalizedPracticePlan({
       userId,
       subject,
+      syllabus,
+      standard,
       Section1: questions.slice(0, Math.ceil(questions.length / 3)).map((q, i) => ({
         questionId: q._id,
         number: i + 1,
         status: "pending",
-        attempts: 0
+        attempts: 0,
       })),
-      Section2: questions.slice(Math.ceil(questions.length / 3), Math.ceil(questions.length * 2 / 3)).map((q, i) => ({
-        questionId: q._id,
-        number: i + 1,
-        status: "pending",
-        attempts: 0
-      })),
+      Section2: questions
+        .slice(Math.ceil(questions.length / 3), Math.ceil(questions.length * 2 / 3))
+        .map((q, i) => ({
+          questionId: q._id,
+          number: i + 1 + Math.ceil(questions.length / 3), // offset numbering
+          status: "pending",
+          attempts: 0,
+        })),
       Section3: questions.slice(Math.ceil(questions.length * 2 / 3)).map((q, i) => ({
         questionId: q._id,
-        number: i + 1,
+        number: i + 1 + Math.ceil(questions.length * 2 / 3), // offset numbering
         status: "pending",
-        attempts: 0
+        attempts: 0,
       })),
       currentQuestion: {
         section: 1,
         questionIndex: 0,
-        questionId: questions[0]?._id || null
+        questionId: questions[0]?._id || null,
       },
       progress: {
         completedQuestions: 0,
         correctAnswers: 0,
         wrongAnswers: 0,
-        status: "not_started"
+        status: "not_started",
       },
       isActive: true,
       personalizedConfig: {
         examConfig,
         questionSources,
-        createdAt: new Date()
-      }
+        createdAt: new Date(),
+      },
     });
 
     await session.save();
@@ -457,7 +503,7 @@ export const getPersonalizedSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const session = await RandomQuestions.findById(sessionId)
+    const session = await PersonalizedPracticePlan.findById(sessionId)
       .populate({
         path: 'Section1.questionId',
         select: 'question options correctAnswer difficulty topic subject'
@@ -481,14 +527,20 @@ export const getPersonalizedSession = async (req, res) => {
       options.map((opt) => {
         if (typeof opt === "string") return { text: opt };
         if (opt && typeof opt === "object") {
-          if (opt.text) return opt;
-          if (opt.diagramUrl) return opt;
-          const joined = Object.keys(opt)
+          const plain = typeof opt.toObject === "function" ? opt.toObject() : opt;
+          if (plain.text && String(plain.text).trim() !== "") return { text: String(plain.text).trim(), diagramUrl: plain.diagramUrl || null };
+          if (plain.diagramUrl) return { text: "", diagramUrl: plain.diagramUrl };
+          const joined = Object.keys(plain)
             .filter((k) => !isNaN(k))
             .sort((a, b) => a - b)
-            .map((k) => opt[k])
-            .join("");
-          return { text: joined };
+            .map((k) => String(plain[k] ?? "")).join("");
+          if (joined.trim() !== "") return { text: joined };
+          const fallback = Object.entries(plain)
+            .filter(([key, value]) => !["_id", "id", "__v", "diagramUrl"].includes(key) && typeof value === "string")
+            .map(([, value]) => value)
+            .join(" ")
+            .trim();
+          return { text: fallback };
         }
         return { text: "" };
       });

@@ -32,13 +32,23 @@ export const studentRegisterGoogle = async (req, res) => {
       student = new Student({
         FullName: fullName,
         email: email,
-        password: "", // or mark as external signup
+        password: "", // Google signup users don't need password
       });
       await student.save();
+    } else {
+      const token = generateToken(student);
+      return res.status(200).json({
+        message: "Student already registered",
+        student: {
+          id: student._id,
+          FullName: student.FullName,
+          email: student.email,
+        },
+        token
+      });
     }
-     else {
-      return res.status(200).json({ message: "Student already registered", student});
-     }
+
+    const token = generateToken(student);
 
     return res.status(201).json({
       message: "Student signed up with Google successfully",
@@ -47,6 +57,7 @@ export const studentRegisterGoogle = async (req, res) => {
         FullName: student.FullName,
         email: student.email,
       },
+      token
     });
   } catch (error) {
     console.error("Google signup error:", error);
@@ -245,7 +256,7 @@ export const studentSignup = async (req, res) => {
 export const updateStudentStandard = async (req, res) => {
   try {
     const { studentId } = req.params; // Student ID comes from route params
-    const { classStandard , onBoarding } = req.body; // New class standard from request body
+    const { classStandard, onBoarding } = req.body; // New class standard from request body
 
     if (!classStandard) {
       return res.status(400).json({ message: "classStandard is required" });

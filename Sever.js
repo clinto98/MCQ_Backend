@@ -38,7 +38,7 @@ app.use('/api/practiceplan', PracticeplanRoute);
 app.use('/api/student', StudentRoute);
 app.use('/api/admin', AdminRoute);
 app.use('/api/questionpaper', QuestionPaperRoute);
-app.use('/api/personalized-mcq', PersonalizedMcqRoute);
+app.use('/api/personalizedmcq', PersonalizedMcqRoute);
 
 
 app.listen(PORT, () => {
