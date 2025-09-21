@@ -8,15 +8,17 @@ import StudentRoute from "./Route/StudentRoute.js"
 import AdminRoute from "./Route/AdminRoute.js"
 import QuestionPaperRoute from "./Route/QuestionPaperRoute.js"
 import PersonalizedMcqRoute from "./Route/PersonalizedMcqRoute.js"
+import PaymentRoute from "./Route/PaymentRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
+
 
 
 const app = express();
 
 dotenv.config();
 app.use(cors({
-     origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
 }));
 
@@ -28,7 +30,7 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 
-app.get('/',(req,res)=>{
+app.get('/', (req, res) => {
     res.send('Hello World!');
 })
 
@@ -39,6 +41,7 @@ app.use('/api/student', StudentRoute);
 app.use('/api/admin', AdminRoute);
 app.use('/api/questionpaper', QuestionPaperRoute);
 app.use('/api/personalizedmcq', PersonalizedMcqRoute);
+app.use('/api/payment', PaymentRoute)
 
 
 app.listen(PORT, () => {
