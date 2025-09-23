@@ -154,7 +154,15 @@ export const generatePreviousYearSession = async (req, res) => {
 export const getPreviousYearSession = async (req, res) => {
     try {
         const { userId } = req.params;
-        const session = await PreviousyearQuestions.findOne({ userId, isActive: true })
+        const { subject , syllabus , standard  } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: "userId is required" });
+        }
+        if (!subject || !syllabus || !standard) {
+            return res.status(400).json({ message: "userId, subject, syllabus and standard are required" });
+        }
+        const session = await PreviousyearQuestions.findOne({ userId , isActive: true })
             .lean();
         if (!session) return res.status(404).json({ message: "No active session found" });
 

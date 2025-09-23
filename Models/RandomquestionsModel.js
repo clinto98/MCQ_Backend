@@ -28,6 +28,14 @@ const randomquestionsSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    syllabus: {
+      type: String,
+      trim: true,
+    },
+    standard: {
+      type: String,
+      trim: true,
+    },
 
     // Sections
     Section1: [questionStatusSchema],

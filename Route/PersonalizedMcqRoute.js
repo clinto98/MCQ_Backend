@@ -15,10 +15,11 @@ router.post("/generate", generatePersonalizedMcq);
 router.get("/session/:sessionId", getPersonalizedSession);
 
 // Get available topics for a subject
-router.get("/topics", getAvailableTopics);
+router.post("/topics", getAvailableTopics);
 
 // Get available previous years for a subject
 router.get("/previous-years", getAvailablePreviousYears);
+
 
 export default router;
 

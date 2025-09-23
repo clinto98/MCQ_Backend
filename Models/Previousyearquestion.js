@@ -30,7 +30,13 @@ const previousyearquestionsSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
+    
+    syllabus: {
+      type: String,
+    },
+    standard: {
+      type: String,
+    },
     // Sections
     Section1: [questionStatusSchema],
     Section2: [questionStatusSchema],

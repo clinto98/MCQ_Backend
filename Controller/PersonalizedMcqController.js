@@ -586,7 +586,7 @@ export const getPersonalizedSession = async (req, res) => {
  */
 export const getAvailableTopics = async (req, res) => {
   try {
-    const { subject, syllabus = "CBSE", standard = "12" } = req.query;
+    const { subject, syllabus, standard } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });

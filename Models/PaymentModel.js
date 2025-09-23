@@ -15,6 +15,10 @@ const paymentSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" }, // optional link
   },
   { timestamps: true }
+
+  
 );
+
+
 
 export default mongoose.model("Payment", paymentSchema);

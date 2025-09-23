@@ -327,116 +327,138 @@ export const checkAnswerById = async (req, res) => {
 // ✅ getRandomQuestion
 export const getRandomQuestion = async (req, res) => {
   try {
-    const { userId, subject } = req.body;
+    const { userId, subject, syllabus, standard } = req.body;
 
-    if (!subject) {
-      return res.status(400).json({ message: "Subject is required" });
+    // === VALIDATION ===
+    if (!userId || !subject || !syllabus || !standard) {
+      return res.status(400).json({
+        message: "userId, subject, syllabus and standard are required",
+      });
     }
 
     const questionCount = 10;
     const totalNeeded = questionCount * 3;
 
-    // 🔹 1. Resume if session exists
-    let existingSession = await RandomQuestions.findOne({
+    // === 1) Resume existing active session if present ===
+    const existingSession = await RandomQuestions.findOne({
       userId,
       subject,
+      syllabus,
+      standard,
       isActive: true,
     });
 
     if (existingSession) {
-      // Load question details
+      // collect all question IDs from the session
       const allIds = [
         ...existingSession.Section1.map((q) => q.questionId),
         ...existingSession.Section2.map((q) => q.questionId),
         ...existingSession.Section3.map((q) => q.questionId),
       ];
 
+      // fetch question details once and map by id (lean for plain objects)
       const fullQuestions = await twelve
         .find({ _id: { $in: allIds } })
-        .select("_id question options correctAnswer");
+        .select("_id question options correctAnswer")
+        .lean();
+
+      const fqMap = new Map(fullQuestions.map((fq) => [fq._id.toString(), fq]));
 
       const mapWithDetails = (section) =>
         section.map((q) => {
-          const details = fullQuestions.find(
-            (fq) => fq._id.toString() === q.questionId.toString()
-          );
+          // q might be a mongoose subdoc -> convert safely
+          const plain = q.toObject ? q.toObject() : { ...q };
+          const details = fqMap.get((plain.questionId || "").toString());
           return {
-            ...q.toObject(),
-            question: details?.question,
-            options: details?.options,
-            correctAnswer: details?.correctAnswer,
+            ...plain,
+            question: details?.question ?? null,
+            options: details?.options ?? null,
+            correctAnswer: details?.correctAnswer ?? null,
           };
         });
 
-      let current;
-      if (existingSession.currentQuestion?.section === 1) {
-        current =
-          existingSession.Section1[existingSession.currentQuestion.questionIndex];
-      } else if (existingSession.currentQuestion?.section === 2) {
-        current =
-          existingSession.Section2[existingSession.currentQuestion.questionIndex];
-      } else if (existingSession.currentQuestion?.section === 3) {
-        current =
-          existingSession.Section3[existingSession.currentQuestion.questionIndex];
+      let current = null;
+      if (existingSession.currentQuestion) {
+        const { section, questionIndex } = existingSession.currentQuestion;
+        const arr =
+          section === 1
+            ? existingSession.Section1
+            : section === 2
+            ? existingSession.Section2
+            : existingSession.Section3;
+        current = arr && arr[questionIndex] ? (arr[questionIndex].toObject ? arr[questionIndex].toObject() : arr[questionIndex]) : null;
+        if (current) {
+          const d = fqMap.get(current.questionId.toString());
+          current.question = d?.question ?? null;
+          current.options = d?.options ?? null;
+          current.correctAnswer = d?.correctAnswer ?? null;
+        }
       }
 
       return res.status(200).json({
         message: "Resuming previous session",
         existingSessionId: existingSession._id,
         subject,
+        syllabus,
+        standard,
         Section1: mapWithDetails(existingSession.Section1),
         Section2: mapWithDetails(existingSession.Section2),
         Section3: mapWithDetails(existingSession.Section3),
-        currentQuestion: current ? mapWithDetails([current])[0] : null,
+        currentQuestion: current,
         progress: existingSession.progress,
       });
     }
 
-    // 🔹 2. Start a new session
+    // === 2) No existing session: ensure DB has enough questions for the requested triple ===
+    const availableCount = await twelve.countDocuments({
+      subject,
+      syllabus,
+      standard,
+    });
+
+    if (availableCount === 0) {
+      return res.status(404).json({ message: "No questions found for this subject/syllabus/standard." });
+    }
+
+    if (availableCount < totalNeeded) {
+      return res.status(400).json({
+        message: `Not enough questions available. Found ${availableCount}, need ${totalNeeded}.`,
+      });
+    }
+
+    // === fetch random questions (we know DB has at least totalNeeded) ===
     const randomQuestions = await twelve.aggregate([
-      { $match: { subject } },
+      { $match: { subject, syllabus, standard } },
       { $sample: { size: totalNeeded } },
     ]);
 
-    if (!randomQuestions.length) {
-      return res.status(404).json({ message: "No questions found for this subject." });
-    }
-
-    const Section1 = randomQuestions.slice(0, questionCount).map((q, index) => ({
+    // build section arrays (store minimal data in DB: ids + metadata)
+    const Section1 = randomQuestions.slice(0, questionCount).map((q, i) => ({
       questionId: q._id,
-      number: index + 1,
+      number: i + 1,
       status: "pending",
       attempts: 0,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correctAnswer,
     }));
 
-    const Section2 = randomQuestions
-      .slice(questionCount, questionCount * 2)
-      .map((q, index) => ({
-        questionId: q._id,
-        number: index + 1,
-        status: "pending",
-        attempts: 0,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-      }));
-
-    const Section3 = randomQuestions.slice(questionCount * 2).map((q, index) => ({
+    const Section2 = randomQuestions.slice(questionCount, questionCount * 2).map((q, i) => ({
       questionId: q._id,
-      number: index + 1,
+      number: i + 1,
       status: "pending",
       attempts: 0,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correctAnswer,
+    }));
+
+    const Section3 = randomQuestions.slice(questionCount * 2).map((q, i) => ({
+      questionId: q._id,
+      number: i + 1,
+      status: "pending",
+      attempts: 0,
     }));
 
     const newSession = new RandomQuestions({
       userId,
       subject,
+      syllabus,
+      standard,
       Section1,
       Section2,
       Section3,
@@ -452,20 +474,40 @@ export const getRandomQuestion = async (req, res) => {
 
     await newSession.save();
 
+    // populate question details for response (so client gets full questions)
+    const allIds = [...Section1, ...Section2, ...Section3].map((s) => s.questionId);
+    const fullQuestions = await twelve
+      .find({ _id: { $in: allIds } })
+      .select("_id question options correctAnswer")
+      .lean();
+
+    const fqMap = new Map(fullQuestions.map((fq) => [fq._id.toString(), fq]));
+
+    const mapWithDetails = (section) =>
+      section.map((s) => ({
+        ...s,
+        question: fqMap.get(s.questionId.toString())?.question ?? null,
+        options: fqMap.get(s.questionId.toString())?.options ?? null,
+        correctAnswer: fqMap.get(s.questionId.toString())?.correctAnswer ?? null,
+      }));
+
     return res.status(201).json({
       message: "New session started",
       subject,
-      Section1,
-      Section2,
-      Section3,
-      currentQuestion: Section1[0],
+      syllabus,
+      standard,
+      Section1: mapWithDetails(Section1),
+      Section2: mapWithDetails(Section2),
+      Section3: mapWithDetails(Section3),
+      currentQuestion: mapWithDetails([Section1[0]])[0],
       progress: newSession.progress,
     });
   } catch (error) {
     console.error("Error fetching question:", error);
-    res.status(500).json({ message: "Error fetching question", error });
+    return res.status(500).json({ message: "Error fetching question", error: error.message });
   }
 };
+
 
 
 export const createMissedQuestions = async (req, res) => {
@@ -473,10 +515,10 @@ export const createMissedQuestions = async (req, res) => {
     if (!req.body) {
       return res.status(400).json({ message: "Request body is missing" });
     }
-    const { userId, subject } = req.body;
+    const { userId, subject, syllabus , standard } = req.body;
 
-    if (!userId || !subject) {
-      return res.status(400).json({ message: "User ID and subject are required" });
+    if (!userId || !subject || !syllabus || !standard) {
+      return res.status(400).json({ message: "User ID, subject, syllabus, and standard are required" });
     }
 
     // ✅ Collect all incorrect questions from all models
@@ -517,10 +559,12 @@ export const createMissedQuestions = async (req, res) => {
 
     // ✅ Upsert into MissedQuestions
     const missedSession = await MissedQuestions.findOneAndUpdate(
-      { userId, subject, isActive: true },
+      { userId, subject, syllabus, standard, isActive: true },
       {
         userId,
         subject,
+        syllabus,
+        standard,
         questions: allIncorrects,
         currentQuestion: {
           index: 0,
@@ -540,6 +584,8 @@ export const createMissedQuestions = async (req, res) => {
     return res.status(201).json({
       message: "Missed questions session created successfully",
       subject,
+      syllabus,
+      standard,
       totalMissed: allIncorrects.length,
       sessionId: missedSession._id,
     });
@@ -550,18 +596,17 @@ export const createMissedQuestions = async (req, res) => {
   }
 };
 
-
 export const getMissedQuestions = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { subject } = req.body;
+    const { subject , syllabus , standard  } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });
     }
 
     // Find the session for this user and subject that is active
-    const session = await MissedQuestions.findOne({ userId, subject, isActive: true });
+    const session = await MissedQuestions.findOne({ userId, subject, syllabus, standard, isActive: true });
 
     if (!session) {
       return res.status(404).json({ message: "No missed questions session found for this subject" });
@@ -734,7 +779,7 @@ export const checkMissedAnswer = async (req, res) => {
 
 export const createRandomQuestions = async (req, res) => {
   try {
-    const { userId, subject } = req.body;
+    const { userId, subject , syllabus , standard } = req.body;
 
     if (!userId || !subject) {
       return res.status(400).json({ message: "User ID and subject are required" });
@@ -744,6 +789,8 @@ export const createRandomQuestions = async (req, res) => {
     const existingActiveSession = await RandomQuestions.findOne({
       userId,
       subject,
+      syllabus,
+      standard,
       isActive: true,
     });
 
@@ -802,6 +849,8 @@ export const createRandomQuestions = async (req, res) => {
     const newSession = new RandomQuestions({
       userId,
       subject,
+      syllabus,
+      standard,
       Section1: section1,
       Section2: section2,
       Section3: section3,
@@ -818,14 +867,13 @@ export const createRandomQuestions = async (req, res) => {
 
     return res.status(201).json({
       message: "Random question session created successfully",
-      sessionId: newSession._id,
+      sessionId: newSession,
     });
   } catch (error) {
     console.error("Error creating random questions:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 
 export const GetRandomQuestions = async (req, res) => {
