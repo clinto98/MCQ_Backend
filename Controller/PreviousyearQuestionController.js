@@ -166,8 +166,8 @@ export const generatePreviousYearSession = async (req, res) => {
 // Get a fully populated session (with actual question texts/options)
 export const getPreviousYearSession = async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { subject, syllabus, standard } = req.body;
+       
+        const { userId, subject, syllabus, standard } = req.body;
 
         if (!userId) {
             return res.status(400).json({ message: "userId is required" });
