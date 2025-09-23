@@ -4,152 +4,164 @@ import twelve from "../Models/McqModel.js"
 
 // Generate a previous-year session with 3 sections based on filters
 export const generatePreviousYearSession = async (req, res) => {
-    try {
-        const {
-            userId,
-            subject,
-            syllabus,
-            standard,
-            years = [], // [2024, 2023]
-            units = [], // paper.unit filter
-            totalQuestions = 10, // across all sections
-            includeFrequentlyAsked,
-            includeAttempted,
-        } = req.body;
+  try {
+    const {
+      userId,
+      subject,
+      syllabus,
+      standard,
+      years = [],
+      units = [],
+      totalQuestions = 10,
+      includeFrequentlyAsked,
+      includeAttempted,
+    } = req.body;
 
-        if (!userId || !subject) {
-            return res.status(400).json({ message: "userId and subject are required" });
-        }
-
-        const perSection = Math.max(1, Math.floor(totalQuestions / 3));
-        const targetTotal = perSection * 3; // normalize to 3 sections
-
-        // Base match for papers
-        const match = {
-            subject,
-            syllabus,
-            standard,
-        };
-        if (years?.length) match.examYear = { $in: years };
-        if (units?.length) match.unit = { $in: units };
-        // if (includeFrequentlyAsked) match.FrequentlyAsked = true;
-
-
-        console.log("match", match);
-
-
-        // Collect pool of question references {paperId, idx, question}
-        // Collect pool of question references {paperId, idx, question}
-        const papers = await PreviousQuestionPaper.find(match)
-            .select("questions examYear unit difficulty subject syllabus standard")
-            .lean();
-
-        console.log("papers", papers);
-
-
-        let pool = [];
-        papers.forEach((paper) => {
-            let questions = paper.questions;
-
-            if (includeFrequentlyAsked) {
-                // Filter only frequently asked questions if needed
-                questions = questions.filter(q => q.FrequentlyAsked === true);
-            }
-
-            questions.forEach((q, idx) => {
-                pool.push({ paperId: paper._id, idx, q });
-            });
-        });
-
-        console.log("pooll", pool);
-
-
-        // If includeAttempted, restrict pool to user's previously attempted questions
-        if (includeAttempted) {
-            const hist = await PreviousyearQuestions.find({ userId, subject })
-                .select("Section1 Section2 Section3")
-                .lean();
-            const attemptedSet = new Set();
-            hist.forEach((s) => {
-                [...s.Section1, ...s.Section2, ...s.Section3].forEach((x) => {
-                    // key on paperId + paperQuestionIndex
-                    attemptedSet.add(`${x.questionId.toString()}_${x.paperQuestionIndex}`);
-                });
-            });
-            pool = pool.filter((p) => attemptedSet.has(`${p.paperId.toString()}_${p.idx}`));
-        }
-
-        if (pool.length === 0) {
-            return res.status(404).json({ message: "No questions matched given filters" });
-        }
-
-        // shuffle
-        pool = shuffleArray(pool);
-
-        const chosen = pool.slice(0, targetTotal);
-        const s1 = chosen.slice(0, perSection);
-        const s2 = chosen.slice(perSection, perSection * 2);
-        const s3 = chosen.slice(perSection * 2, perSection * 3);
-
-        const Section1 = s1.map((item, i) => ({
-            questionId: item.paperId,
-            paperQuestionIndex: item.idx,
-            number: i + 1,
-            status: "pending",
-            attempts: 0,
-        }));
-        const Section2 = s2.map((item, i) => ({
-            questionId: item.paperId,
-            paperQuestionIndex: item.idx,
-            number: i + 1,
-            status: "pending",
-            attempts: 0,
-        }));
-        const Section3 = s3.map((item, i) => ({
-            questionId: item.paperId,
-            paperQuestionIndex: item.idx,
-            number: i + 1,
-            status: "pending",
-            attempts: 0,
-        }));
-
-        // deactivate current active
-        await PreviousyearQuestions.updateMany({ userId, subject, isActive: true }, { isActive: false });
-
-        // create session
-        const session = new PreviousyearQuestions({
-            userId,
-            subject,
-            Section1,
-            Section2,
-            Section3,
-            currentQuestion: {
-                section: 1,
-                questionIndex: 0,
-                questionId: Section1[0]?.questionId || null,
-            },
-            progress: {
-                completedQuestions: 0,
-                correctAnswers: 0,
-                wrongAnswers: 0,
-                status: "not_started",
-            },
-            isActive: true,
-        });
-
-        await session.save();
-
-        return res.status(201).json({
-            message: "Previous year session created",
-            sessionId: session._id,
-            perSection,
-            totalQuestions: targetTotal,
-        });
-    } catch (error) {
-        console.error("Error generating PYQ session:", error);
-        res.status(500).json({ message: "Server error", error: error.message });
+    if (!userId || !subject) {
+      return res.status(400).json({ message: "userId and subject are required" });
     }
+
+    // 🔎 Step 1: Check if ANY active session exists for this user/subject/syllabus/standard
+    const activeSession = await PreviousyearQuestions.findOne({
+      userId,
+      subject,
+      syllabus,
+      standard,
+      isActive: true,
+    });
+
+    if (activeSession) {
+      return res.status(200).json({
+        message: "Active session already exists",
+        sessionId: activeSession._id,
+        perSection: Math.max(1, Math.floor(totalQuestions / 3)),
+        totalQuestions:
+          activeSession.Section1.length +
+          activeSession.Section2.length +
+          activeSession.Section3.length,
+        currentQuestion: activeSession.currentQuestion,
+        preferences: activeSession.preferences,
+      });
+    }
+
+    // 🔹 Step 2: If no active session, then create a new one
+    const perSection = Math.max(1, Math.floor(totalQuestions / 3));
+    const targetTotal = perSection * 3;
+
+    const match = { subject, syllabus, standard };
+    if (years?.length) match.examYear = { $in: years };
+    if (units?.length) match.unit = { $in: units };
+
+    const papers = await PreviousQuestionPaper.find(match)
+      .select("questions examYear unit difficulty subject syllabus standard")
+      .lean();
+
+    let pool = [];
+    papers.forEach((paper) => {
+      let questions = paper.questions;
+      if (includeFrequentlyAsked) {
+        questions = questions.filter((q) => q.FrequentlyAsked === true);
+      }
+      questions.forEach((q, idx) => {
+        pool.push({ paperId: paper._id, idx, q });
+      });
+    });
+
+    if (includeAttempted) {
+      const hist = await PreviousyearQuestions.find({ userId, subject })
+        .select("Section1 Section2 Section3")
+        .lean();
+      const attemptedSet = new Set();
+      hist.forEach((s) => {
+        [...s.Section1, ...s.Section2, ...s.Section3].forEach((x) => {
+          attemptedSet.add(`${x.questionId.toString()}_${x.paperQuestionIndex}`);
+        });
+      });
+      pool = pool.filter(
+        (p) => !attemptedSet.has(`${p.paperId.toString()}_${p.idx}`)
+      );
+    }
+
+    if (pool.length === 0) {
+      return res.status(404).json({ message: "No questions matched given filters" });
+    }
+
+    pool = shuffleArray(pool);
+
+    const chosen = pool.slice(0, targetTotal);
+    const s1 = chosen.slice(0, perSection);
+    const s2 = chosen.slice(perSection, perSection * 2);
+    const s3 = chosen.slice(perSection * 2, perSection * 3);
+
+    const Section1 = s1.map((item, i) => ({
+      questionId: item.paperId,
+      paperQuestionIndex: item.idx,
+      number: i + 1,
+      status: "pending",
+      attempts: 0,
+    }));
+    const Section2 = s2.map((item, i) => ({
+      questionId: item.paperId,
+      paperQuestionIndex: item.idx,
+      number: i + 1,
+      status: "pending",
+      attempts: 0,
+    }));
+    const Section3 = s3.map((item, i) => ({
+      questionId: item.paperId,
+      paperQuestionIndex: item.idx,
+      number: i + 1,
+      status: "pending",
+      attempts: 0,
+    }));
+
+    const currentQuestion = {
+      section: 1,
+      questionIndex: 0,
+      questionId: Section1[0]?.questionId || null,
+    };
+
+    const session = new PreviousyearQuestions({
+      userId,
+      subject,
+      syllabus,
+      standard,
+      Section1,
+      Section2,
+      Section3,
+      currentQuestion,
+      progress: {
+        completedQuestions: 0,
+        correctAnswers: 0,
+        wrongAnswers: 0,
+        status: "not_started",
+      },
+      preferences: {
+        years,
+        units,
+        includeFrequentlyAsked: !!includeFrequentlyAsked,
+        includeAttempted: !!includeAttempted,
+        totalQuestions,
+      },
+      isActive: true,
+    });
+
+    await session.save();
+
+    return res.status(201).json({
+      message: "Previous year session created",
+      sessionId: session._id,
+      perSection,
+      totalQuestions: targetTotal,
+      currentQuestion,
+    });
+  } catch (error) {
+    console.error("Error generating PYQ session:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 };
+
+
 
 // Get a fully populated session (with actual question texts/options)
 export const getPreviousYearSession = async (req, res) => {
