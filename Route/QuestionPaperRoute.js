@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post('/UploadQuestionPaper',addPreviousQuestionPaper)
 router.post('/previous-year/generate', generatePreviousYearSession)
-router.get('/previous-year/session/:userId', getPreviousYearSession)
+router.post('/previous-year/session', getPreviousYearSession)
 router.post('/previous-year/check-answer', checkPreviousYearAnswer)
 router.post('/previous/units',GetAllUnits)
 
