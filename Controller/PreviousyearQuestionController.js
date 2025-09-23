@@ -1,5 +1,6 @@
 import PreviousQuestionPaper from "../Models/QuestionPaperModel.js";
 import PreviousyearQuestions from "../Models/Previousyearquestion.js";
+import twelve from "../Models/McqModel.js"
 
 // Generate a previous-year session with 3 sections based on filters
 export const generatePreviousYearSession = async (req, res) => {
@@ -43,8 +44,8 @@ export const generatePreviousYearSession = async (req, res) => {
             .select("questions examYear unit difficulty subject syllabus standard")
             .lean();
 
-            console.log("papers", papers);
-            
+        console.log("papers", papers);
+
 
         let pool = [];
         papers.forEach((paper) => {
@@ -154,7 +155,7 @@ export const generatePreviousYearSession = async (req, res) => {
 export const getPreviousYearSession = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { subject , syllabus , standard  } = req.body;
+        const { subject, syllabus, standard } = req.body;
 
         if (!userId) {
             return res.status(400).json({ message: "userId is required" });
@@ -162,7 +163,7 @@ export const getPreviousYearSession = async (req, res) => {
         if (!subject || !syllabus || !standard) {
             return res.status(400).json({ message: "userId, subject, syllabus and standard are required" });
         }
-        const session = await PreviousyearQuestions.findOne({ userId , isActive: true })
+        const session = await PreviousyearQuestions.findOne({ userId, isActive: true })
             .lean();
         if (!session) return res.status(404).json({ message: "No active session found" });
 
@@ -279,4 +280,20 @@ function shuffleArray(arr) {
         [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+}
+
+
+
+export const GetAllUnits = async (req, res) => {
+    try {
+        const { subject, syllabus, standard } = req.body;
+        if (!subject || !syllabus || !standard) {
+            return res.status(400).json({ message: "subject, syllabus and standard are required" });
+        }
+        const units = await PreviousQuestionPaper.distinct("unit", { subject, syllabus, standard });
+        res.status(200).json({ message: "Units fetched successfully", units });
+    } catch (error) {
+        console.error("Error retrieving topics:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
 }
