@@ -3,7 +3,8 @@ import {
   generatePersonalizedMcq,
   getPersonalizedSession,
   getAvailableTopics,
-  getAvailablePreviousYears
+  getAvailablePreviousYears,
+  checkPersonalizedAnswerById
 } from "../Controller/PersonalizedMcqController.js";
 
 const router = express.Router();
@@ -12,7 +13,7 @@ const router = express.Router();
 router.post("/generate", generatePersonalizedMcq);
 
 // Get personalized session details
-router.get("/session/:sessionId", getPersonalizedSession);
+router.post("/getallpersonlizedquestions", getPersonalizedSession);
 
 // Get available topics for a subject
 router.post("/topics", getAvailableTopics);
@@ -20,6 +21,7 @@ router.post("/topics", getAvailableTopics);
 // Get available previous years for a subject
 router.get("/previous-years", getAvailablePreviousYears);
 
+router.post("/checkanswerbyid/:questionId", checkPersonalizedAnswerById)
 
 export default router;
 

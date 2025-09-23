@@ -10,8 +10,8 @@ export const generatePersonalizedMcq = async (req, res) => {
     const {
       userId,
       subject,
-      syllabus = "CBSE",
-      standard = "12",
+      syllabus ,
+      standard ,
 
       // Topic filtering
       selectedTopics = [],
@@ -501,9 +501,15 @@ const createPersonalizedSession = async ({
  */
 export const getPersonalizedSession = async (req, res) => {
   try {
-    const { sessionId } = req.params;
 
-    const session = await PersonalizedPracticePlan.findById(sessionId)
+    const {userId, syllabus , standard , subject} = req.body;
+
+     const session = await PersonalizedPracticePlan.findOne({
+      userId,
+      syllabus,
+      standard,
+      subject,
+    })
       .populate({
         path: 'Section1.questionId',
         select: 'question options correctAnswer difficulty topic subject'
@@ -607,6 +613,117 @@ export const getAvailableTopics = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+
+export const checkPersonalizedAnswerById = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { userAnswer, userId } = req.body;
+
+    if (!questionId || !userAnswer || !userId) {
+      return res.status(400).json({
+        message: "questionId, userAnswer, and userId are required",
+      });
+    }
+
+    // 🔹 Fetch active session and populate sections + currentQuestion
+    const session = await PersonalizedPracticePlan.findOne({
+      userId,
+      isActive: true,
+    })
+      .populate("Section1.questionId", "question correctAnswer options difficulty topic subject")
+      .populate("Section2.questionId", "question correctAnswer options difficulty topic subject")
+      .populate("Section3.questionId", "question correctAnswer options difficulty topic subject")
+      .populate("currentQuestion.questionId", "question correctAnswer options difficulty topic subject");
+
+    if (!session) {
+      return res.status(404).json({ message: "Active personalized session not found" });
+    }
+
+    // 🔹 Helper: flatten all sections
+    const allQuestions = [
+      ...session.Section1.map((q) => ({ ...q.toObject(), section: 1 })),
+      ...session.Section2.map((q) => ({ ...q.toObject(), section: 2 })),
+      ...session.Section3.map((q) => ({ ...q.toObject(), section: 3 })),
+    ];
+
+    // 🔹 Find the question
+    const target = allQuestions.find((q) => q.questionId?._id.toString() === questionId.toString());
+    if (!target) {
+      return res.status(404).json({ message: "Question not found in personalized session" });
+    }
+
+    const question = target.questionId;
+
+    // 🔹 Check correctness
+    const isCorrect =
+      question.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
+
+    // 🔹 Update the session document in the correct section
+    const sectionKey = `Section${target.section}`;
+    const sectionIdx = session[sectionKey].findIndex(
+      (q) => q.questionId._id.toString() === questionId.toString()
+    );
+
+    if (sectionIdx !== -1) {
+      session[sectionKey][sectionIdx].status = isCorrect ? "correct" : "incorrect";
+      session[sectionKey][sectionIdx].attempts += 1;
+      session[sectionKey][sectionIdx].answeredAt = new Date();
+      session[sectionKey][sectionIdx].userAnswer = userAnswer;
+    }
+
+    // 🔹 Update progress
+    session.progress.completedQuestions += 1;
+    if (isCorrect) session.progress.correctAnswers += 1;
+    else session.progress.wrongAnswers += 1;
+
+    // 🔹 Move current question pointer (very simple: just go next in same section, or move section)
+    let { section, questionIndex } = session.currentQuestion;
+    questionIndex++;
+
+    if (section === 1 && questionIndex >= session.Section1.length) {
+      section = 2;
+      questionIndex = 0;
+    }
+    if (section === 2 && questionIndex >= session.Section2.length) {
+      section = 3;
+      questionIndex = 0;
+    }
+
+    if (section === 3 && questionIndex >= session.Section3.length) {
+      // 🔹 Session completed
+      session.progress.status = "completed";
+      session.isActive = false;
+      session.currentQuestion = { section: null, questionIndex: null, questionId: null };
+    } else {
+      session.progress.status = "in_progress";
+      const nextQ = session[`Section${section}`][questionIndex];
+      session.currentQuestion = {
+        section,
+        questionIndex,
+        questionId: nextQ?.questionId || null,
+      };
+    }
+
+    await session.save();
+
+    return res.status(200).json({
+      message: "Answer checked and personalized session updated",
+      questionId: question._id,
+      userAnswer,
+      isCorrect,
+      correctAnswer: isCorrect ? undefined : question.correctAnswer,
+      progress: session.progress,
+      currentQuestion: session.currentQuestion,
+    });
+  } catch (error) {
+    console.error("Error in checkPersonalizedAnswerById:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 
 /**
  * Get available previous year papers
