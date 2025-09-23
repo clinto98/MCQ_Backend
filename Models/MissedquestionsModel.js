@@ -28,11 +28,6 @@ const MissedQuestionsSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-<<<<<<< HEAD
-
-    questions: [missedQuestionSchema], // all missed questions in one array
-
-=======
     syllabus: {
       type: String,
     },
@@ -40,7 +35,6 @@ const MissedQuestionsSchema = new mongoose.Schema(
       type: String,
     },
     questions: [missedQuestionSchema], // all missed questions in one array
->>>>>>> c27ac33f96cbcd2eca7f24a6e0dfc3e27df14e5a
     // Track the current question
     currentQuestion: {
       index: { type: Number, default: 0 },
