@@ -10,8 +10,8 @@ export const generatePersonalizedMcq = async (req, res) => {
     const {
       userId,
       subject,
-      syllabus ,
-      standard ,
+      syllabus,
+      standard,
 
       // Topic filtering
       selectedTopics = [],
@@ -32,48 +32,57 @@ export const generatePersonalizedMcq = async (req, res) => {
       attemptedFilter = {
         correct: false,
         incorrect: false,
-        flagged: false
+        flagged: false,
       },
 
       // Question count configuration
-      totalQuestions = 30,
+      totalQuestions,
       questionDistribution = {
-        topics: 0.4,        // 40% from topics
-        previousYear: 0.3,  // 30% from previous year
-        attempted: 0.2,     // 20% from attempted
-        random: 0.1         // 10% random
-      }
+        topics: 0.4, // 40% from topics
+        previousYear: 0.3, // 30% from previous year
+        attempted: 0.2, // 20% from attempted
+        random: 0.1, // 10% random
+      },
     } = req.body;
 
     // Validation
     if (!userId || !subject) {
       return res.status(400).json({
-        message: "userId and subject are required"
+        message: "userId and subject are required",
       });
     }
 
     if (totalQuestions < 1 || totalQuestions > 100) {
       return res.status(400).json({
-        message: "totalQuestions must be between 1 and 100"
+        message: "totalQuestions must be between 1 and 100",
       });
     }
 
     console.log("Generating personalized MCQ with criteria:", {
-      userId, subject, selectedTopics, includePreviousYear,
-      previousYearYears, difficultyLevels, examSimulationMode,
-      includeAttemptedQuestions, attemptedFilter, totalQuestions
+      userId,
+      subject,
+      selectedTopics,
+      includePreviousYear,
+      previousYearYears,
+      difficultyLevels,
+      examSimulationMode,
+      includeAttemptedQuestions,
+      attemptedFilter,
+      totalQuestions,
     });
 
-    // Calculate question distribution
-    const topicQuestions = Math.floor(totalQuestions * questionDistribution.topics);
-    const previousYearQuestions = Math.floor(totalQuestions * questionDistribution.previousYear);
-    const attemptedQuestions = Math.floor(totalQuestions * questionDistribution.attempted);
-    const randomQuestions = totalQuestions - topicQuestions - previousYearQuestions - attemptedQuestions;
+    // --- Step 1: Calculate initial distribution ---
+    let topicQuestions = Math.floor(totalQuestions * questionDistribution.topics);
+    let previousYearQuestions = Math.floor(totalQuestions * questionDistribution.previousYear);
+    let attemptedQuestions = Math.floor(totalQuestions * questionDistribution.attempted);
+
+    let allocated = topicQuestions + previousYearQuestions + attemptedQuestions;
+    let randomQuestions = totalQuestions - allocated;
 
     let allQuestions = [];
     let questionSources = [];
 
-    // 1. Fetch questions from selected topics
+    // --- Step 2: Fetch topic questions ---
     if (selectedTopics.length > 0 && topicQuestions > 0) {
       const topicQuestionsData = await fetchTopicQuestions({
         subject,
@@ -81,18 +90,23 @@ export const generatePersonalizedMcq = async (req, res) => {
         standard,
         topics: selectedTopics,
         difficultyLevels,
-        count: topicQuestions
+        count: topicQuestions,
       });
 
-      allQuestions = [...allQuestions, ...topicQuestionsData];
+      allQuestions.push(...topicQuestionsData);
       questionSources.push({
         source: "topics",
         count: topicQuestionsData.length,
-        topics: selectedTopics
+        topics: selectedTopics,
       });
+
+      // if shortage, add to random pool
+      if (topicQuestionsData.length < topicQuestions) {
+        randomQuestions += topicQuestions - topicQuestionsData.length;
+      }
     }
 
-    // 2. Fetch previous year questions
+    // --- Step 3: Fetch previous year questions ---
     if (includePreviousYear && previousYearYears.length > 0 && previousYearQuestions > 0) {
       const previousYearData = await fetchPreviousYearQuestions({
         subject,
@@ -100,79 +114,103 @@ export const generatePersonalizedMcq = async (req, res) => {
         standard,
         years: previousYearYears,
         difficultyLevels,
-        count: previousYearQuestions
+        count: previousYearQuestions,
       });
 
-      allQuestions = [...allQuestions, ...previousYearData];
+      allQuestions.push(...previousYearData);
       questionSources.push({
         source: "previousYear",
         count: previousYearData.length,
-        years: previousYearYears
+        years: previousYearYears,
       });
+
+      if (previousYearData.length < previousYearQuestions) {
+        randomQuestions += previousYearQuestions - previousYearData.length;
+      }
     }
 
-    // 3. Fetch attempted questions (correct/incorrect/flagged)
+    // --- Step 4: Fetch attempted questions ---
     if (includeAttemptedQuestions && attemptedQuestions > 0) {
       const attemptedData = await fetchAttemptedQuestions({
         userId,
         subject,
         attemptedFilter,
-        count: attemptedQuestions
+        count: attemptedQuestions,
       });
 
-      allQuestions = [...allQuestions, ...attemptedData];
+      allQuestions.push(...attemptedData);
       questionSources.push({
         source: "attempted",
         count: attemptedData.length,
-        filter: attemptedFilter
+        filter: attemptedFilter,
       });
+
+      if (attemptedData.length < attemptedQuestions) {
+        randomQuestions += attemptedQuestions - attemptedData.length;
+      }
     }
 
-    // 4. Fill remaining with random questions
+    // --- Step 5: Fetch random questions (including leftover) ---
     if (randomQuestions > 0) {
       const randomData = await fetchRandomQuestions({
         subject,
         syllabus,
         standard,
         difficultyLevels,
-        excludeIds: allQuestions.map(q => q._id),
-        count: randomQuestions
+        excludeIds: allQuestions.map((q) => q._id),
+        count: randomQuestions,
       });
 
-      allQuestions = [...allQuestions, ...randomData];
+      allQuestions.push(...randomData);
       questionSources.push({
         source: "random",
-        count: randomData.length
+        count: randomData.length,
       });
     }
 
-    // Remove duplicates and shuffle
+    // --- Step 6: Deduplicate and shuffle ---
     const uniqueQuestions = removeDuplicates(allQuestions);
-    const shuffledQuestions = shuffleArray(uniqueQuestions);
+    let shuffledQuestions = shuffleArray(uniqueQuestions);
 
-    // If exam simulation mode, add timing constraints
+    // --- Step 7: Guarantee totalQuestions ---
+    if (shuffledQuestions.length < totalQuestions) {
+      const extraNeeded = totalQuestions - shuffledQuestions.length;
+      const extraData = await fetchRandomQuestions({
+        subject,
+        syllabus,
+        standard,
+        difficultyLevels,
+        excludeIds: shuffledQuestions.map((q) => q._id),
+        count: extraNeeded,
+      });
+      shuffledQuestions.push(...extraData);
+    }
+
+    // trim if overshoot
+    shuffledQuestions = shuffledQuestions.slice(0, totalQuestions);
+
+    // --- Step 8: Exam config ---
     let examConfig = null;
     if (examSimulationMode) {
       examConfig = {
         duration: examDuration,
         totalQuestions: shuffledQuestions.length,
-        timePerQuestion: Math.floor(examDuration * 60 / shuffledQuestions.length), // seconds
+        timePerQuestion: Math.floor((examDuration * 60) / shuffledQuestions.length), // seconds
         startTime: new Date(),
-        endTime: new Date(Date.now() + examDuration * 60 * 1000)
+        endTime: new Date(Date.now() + examDuration * 60 * 1000),
       };
     }
 
-    // Create personalized session
+    // --- Step 9: Create session ---
     const personalizedSession = await createPersonalizedSession({
       userId,
       subject,
       questions: shuffledQuestions,
       examConfig,
-      questionSources
+      questionSources,
     });
 
-
-
+    // --- Step 10: Normalize options ---
     const normalizeOptions = (options) =>
       options.map((opt) => {
         if (!opt) return { text: "" };
@@ -185,18 +223,20 @@ export const generatePersonalizedMcq = async (req, res) => {
           }
           if (plain.diagramUrl && !plain.text) return { text: "", diagramUrl: String(plain.diagramUrl) };
 
-          // Prefer concatenation of numeric keys in order
+          // Join numeric keys
           const joinedNumeric = Object.keys(plain)
             .filter((k) => !isNaN(k))
             .sort((a, b) => a - b)
-            .map((k) => String(plain[k] ?? "")).join("");
-          const trimmedNumeric = joinedNumeric.trim();
+            .map((k) => String(plain[k] ?? ""))
+            .join("");
+          if (joinedNumeric.trim() !== "") return { text: joinedNumeric };
 
-          if (trimmedNumeric !== "") return { text: joinedNumeric };
-
-          // Fallback: concat any other string fields (excluding meta keys)
+          // Fallback: join string fields
           const stringValues = Object.entries(plain)
-            .filter(([key, value]) => !["_id", "id", "__v", "diagramUrl"].includes(key) && typeof value === "string")
+            .filter(
+              ([key, value]) =>
+                !["_id", "id", "__v", "diagramUrl"].includes(key) && typeof value === "string"
+            )
             .map(([, value]) => value)
             .join(" ")
             .trim();
@@ -208,7 +248,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         return { text: "" };
       });
 
-
+    // --- Step 11: Response ---
     return res.status(200).json({
       message: "Personalized MCQ generated successfully",
       sessionId: personalizedSession._id,
@@ -222,18 +262,18 @@ export const generatePersonalizedMcq = async (req, res) => {
         options: normalizeOptions(q.options || []),
         difficulty: q.difficulty,
         topic: q.topic,
-        source: q.source || "mixed"
-      }))
+        source: q.source || "mixed",
+      })),
     });
-
   } catch (error) {
     console.error("Error generating personalized MCQ:", error);
     return res.status(500).json({
       message: "Server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
+
 
 /**
  * Fetch questions from selected topics
