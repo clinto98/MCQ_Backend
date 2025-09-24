@@ -329,6 +329,9 @@ export const getRandomQuestion = async (req, res) => {
   try {
     const { userId, subject, syllabus, standard } = req.body;
 
+    console.log("Request body:", req.body);
+    
+
     // === VALIDATION ===
     if (!userId || !subject || !syllabus || !standard) {
       return res.status(400).json({
