@@ -385,16 +385,16 @@ export const getMockQuestions = async (req, res) => {
 
 export const flagQuestion = async (req, res) => {
   try {
-    const { userId, courseId, questionId } = req.body;
+    const { userId, questionId } = req.body;
 
     // Validate input
-    if (!userId || !questionId || !courseId) {
+    if (!userId || !questionId ) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
     }
 
     // Convert IDs to ObjectId
     const questionObjectId = new mongoose.Types.ObjectId(questionId);
-    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+   
 
     // Find if a flagged question document exists for this user
     let flaggedDoc = await FlaggedQuestion.findOne({ userId });
@@ -405,7 +405,6 @@ export const flagQuestion = async (req, res) => {
         userId,
         questions: [{
           questionId: questionObjectId,
-          courseId: courseObjectId,
           index: 0,
           status: "pending",
           answeredAt: null,
@@ -437,7 +436,6 @@ export const flagQuestion = async (req, res) => {
       // Add new question with courseId
       flaggedDoc.questions.push({
         questionId: questionObjectId,
-        courseId: courseObjectId,
         index: flaggedDoc.questions.length,
         status: "pending",
         answeredAt: null,

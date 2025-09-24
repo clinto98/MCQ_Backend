@@ -6,11 +6,6 @@ const FlaggedquestionModel = new mongoose.Schema({
         ref: "twelve",
         required: true,
     },
-    courseId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Course", // assuming you have a Course model
-        required: true,
-    },
     index: { type: Number, required: true },
     status: {
         type: String,
