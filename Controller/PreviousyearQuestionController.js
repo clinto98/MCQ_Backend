@@ -219,12 +219,13 @@ export const getPreviousYearSession = async (req, res) => {
 // Check answer by pointing to paper + index
 export const checkPreviousYearAnswer = async (req, res) => {
     try {
-        const { userId, paperId, paperQuestionIndex, userAnswer } = req.body;
-        if (!userId || !paperId || paperQuestionIndex === undefined || !userAnswer) {
+        const {questionId} = req.params;
+        const { userId, paperQuestionIndex, userAnswer } = req.body;
+        if (!userId || !questionId || paperQuestionIndex === undefined || !userAnswer) {
             return res.status(400).json({ message: "userId, paperId, paperQuestionIndex, userAnswer required" });
         }
 
-        const paper = await PreviousQuestionPaper.findById(paperId).lean();
+        const paper = await PreviousQuestionPaper.findById(questionId).lean();
         if (!paper) return res.status(404).json({ message: "Paper not found" });
         const pq = paper.questions?.[paperQuestionIndex];
         if (!pq) return res.status(404).json({ message: "Question not found in paper" });
