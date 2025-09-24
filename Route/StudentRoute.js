@@ -6,12 +6,12 @@ const router = express.Router();
 
 router.post('/StudentRegister', studentSignup)
 router.post('/StudentLogin', studentLogin)
-router.post('/StudentLogout',studentLogout)
-router.post('/emailValidate',emailRegister)
-router.put('/standardupdate/:studentId',updateStudentStandard)
-router.put('/StudentPraticeMode',updatePraticeMode)
-router.post('/googleLogin',studentRegisterGoogle)
-router.post('/verifyOtp',verifyOtp)
+router.post('/StudentLogout', studentLogout)
+router.post('/emailValidate', emailRegister)
+router.put('/standardupdate/:studentId', updateStudentStandard)
+router.put('/StudentPraticeMode', updatePraticeMode)
+router.post('/googleLogin', studentRegisterGoogle)
+router.post('/verifyOtp', verifyOtp)
 router.post('/userPreferences/:studentId', updateUserPreferences);
 
 

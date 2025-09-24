@@ -313,15 +313,16 @@ export const MockBattle = async (req, res) => {
 
 export const getMockQuestions = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { subject } = req.body;
+    const {userId, subject , syllabus , Standard } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });
     }
 
     // Find the active mock quiz for the user and subject
-    const quiz = await MockQuestions.findOne({ userId, subject, isActive: true });
+    const quiz = await MockQuestions.findOne({ userId, subject, syllabus, Standard, isActive: true });
+    console.log("quiz",quiz);
+    
     if (!quiz) {
       return res.status(404).json({ message: "Active mock quiz not found for this subject" });
     }
@@ -365,6 +366,8 @@ export const getMockQuestions = async (req, res) => {
     res.status(200).json({
       message: "Mock quiz retrieved successfully",
       quizId: quiz._id,
+      syllabus: quiz.syllabus,
+      Standard: quiz.Standard,
       subject: quiz.subject,
       timeLimit: quiz.timeLimit,
       progress: quiz.progress,

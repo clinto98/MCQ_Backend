@@ -9,7 +9,7 @@ const router = express.Router();
 router.post('/CreateMcq', createTwelfthQuestion)
 router.post('/CreateBlukMcq', createBulkTwelfthQuestions)
 router.post('/CreateMockQuestions', MockBattle)
-router.post('/GetMockQuestions/:userId', getMockQuestions)
+router.post('/GetMockQuestions', getMockQuestions)
 router.post('/checkAnswer/:questionId', checkMockAnswerById)
 router.post('/CreateTimedMockQuestions', createTimeQuiz)
 router.post('/CheckTimedMockQuiz/:questionId',checkTimeAnswerById)
