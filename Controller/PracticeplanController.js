@@ -805,7 +805,7 @@ export const createRandomQuestions = async (req, res) => {
     });
 
     if (existingActiveSession) {
-      return res.status(400).json({
+      return res.status(201).json({
         message: "An active session already exists for this subject. Please complete it before starting a new one.",
         sessionId: existingActiveSession._id,
       });
@@ -875,7 +875,7 @@ export const createRandomQuestions = async (req, res) => {
 
     await newSession.save();
 
-    return res.status(201).json({
+    return res.status(200).json({
       message: "Random question session created successfully",
       sessionId: newSession,
     });
