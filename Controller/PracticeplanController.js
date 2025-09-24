@@ -330,6 +330,9 @@ export const getRandomQuestion = async (req, res) => {
     const { userId, subject, syllabus, standard } = req.body;
 
     console.log("Request body:", req.body);
+
+    console.log("userId:", userId, "subject:", subject,"syllabus",syllabus,"standard",standard);
+    
     
 
     // === VALIDATION ===
@@ -350,6 +353,7 @@ export const getRandomQuestion = async (req, res) => {
       standard,
       isActive: true,
     });
+     console.log("datastoring",existingSession);
 
     if (existingSession) {
       // collect all question IDs from the session
@@ -359,6 +363,9 @@ export const getRandomQuestion = async (req, res) => {
         ...existingSession.Section3.map((q) => q.questionId),
       ];
 
+
+      console.log("datastoring",existingSession);
+      
       // fetch question details once and map by id (lean for plain objects)
       const fullQuestions = await twelve
         .find({ _id: { $in: allIds } })

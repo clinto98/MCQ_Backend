@@ -88,4 +88,5 @@ const personalizedPracticePlanSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+
 export default mongoose.model("PersonalizedPracticePlan", personalizedPracticePlanSchema);
