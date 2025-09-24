@@ -217,9 +217,9 @@ export const MockBattle = async (req, res) => {
     if (!StudentId || !Subject || !Standard || !syllabus || !topic || !Array.isArray(topic) || topic.length === 0) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
     }
-    const existingCount = await MockQuestions.countDocuments({ userId: StudentId, subject: Subject, isActive: true });
+    const existingCount = await MockQuestions.countDocuments({ userId: StudentId, subject: Subject,syllabus,Standard, isActive: true });
     if (existingCount > 0) {
-      return res.status(400).json({ message: "You already have an active mock quiz. Please complete it before starting a new one." });
+      return res.status(201).json({ message: "You already have an active mock quiz. Please complete it before starting a new one." });
     }
 
     // Build the match condition
