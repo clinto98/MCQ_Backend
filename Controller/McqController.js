@@ -343,6 +343,7 @@ export const getMockQuestions = async (req, res) => {
         status: q.status,
         answeredAt: q.answeredAt,
         attempts: q.attempts,
+        questionId: q.questionId,
         question: details?.question || "",
         options: details?.options || [],
         correctAnswer: details?.correctAnswer || "",
