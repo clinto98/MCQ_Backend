@@ -1,5 +1,5 @@
 import express from "express";
-import { emailRegister, studentLogin, studentLogout, studentRegisterGoogle, studentSignup, updatePraticeMode, updateStudentStandard, updateUserPreferences, verifyOtp } from "../Controller/StudentController.js";
+import { emailRegister, studentLogin, studentLogout, studentRegisterGoogle, studentSignup, updatePraticeMode, updateStudentProfile, updateStudentStandard, updateUserPreferences, verifyOtp } from "../Controller/StudentController.js";
 
 
 const router = express.Router();
@@ -13,6 +13,7 @@ router.put('/StudentPraticeMode', updatePraticeMode)
 router.post('/googleLogin', studentRegisterGoogle)
 router.post('/verifyOtp', verifyOtp)
 router.post('/userPreferences/:studentId', updateUserPreferences);
+router.post('/UpdateStudentProfile/:studentId', updateStudentProfile)
 
 
 export default router;

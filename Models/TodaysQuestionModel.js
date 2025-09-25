@@ -16,7 +16,7 @@ const questionStatusSchema = new mongoose.Schema({
   attempts: { type: Number, default: 0 },
 });
 
-const randomquestionsSchema = new mongoose.Schema(
+const todaysquestionsSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -39,12 +39,10 @@ const randomquestionsSchema = new mongoose.Schema(
 
     // Sections
     Section1: [questionStatusSchema],
-    Section2: [questionStatusSchema],
-    Section3: [questionStatusSchema],
 
     // Track the current question user is on
     currentQuestion: {
-      section: { type: Number, enum: [1, 2, 3], default: 1 },
+      section: { type: Number, enum: [1], default: 1 },
       questionIndex: { type: Number, default: 0 },
       questionId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -73,4 +71,4 @@ const randomquestionsSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("RandomQuestions", randomquestionsSchema);
+export default mongoose.model("TodaysQuestions", todaysquestionsSchema);

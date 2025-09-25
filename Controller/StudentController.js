@@ -72,6 +72,64 @@ const generateToken = (user) => {
 
 }
 
+export const updateStudentProfile = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // ✅ Allowed fields only
+    const allowedUpdates = [
+      "FullName",
+      "email",
+      "phoneNumber",
+      "countryCode",
+      "state",
+      "dateofBirth",
+      "Nationality",
+    ];
+
+    // Filter request body to only allowed fields
+    const updates = {};
+    allowedUpdates.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "No valid fields provided for update" });
+    }
+
+    // ✅ Run single DB update
+    const updatedStudent = await Student.findByIdAndUpdate(
+      studentId,
+      { $set: updates },
+      { new: true, runValidators: true } // return updated doc, apply schema validators
+    );
+
+    if (!updatedStudent) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    return res.status(200).json({
+      message: "Student profile updated successfully",
+      student: {
+        id: updatedStudent._id,
+        FullName: updatedStudent.FullName,
+        email: updatedStudent.email,
+        phoneNumber: updatedStudent.phoneNumber,
+        countryCode: updatedStudent.countryCode,
+        state: updatedStudent.state,
+        dateofBirth: updatedStudent.dateofBirth,
+        Nationality: updatedStudent.Nationality,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating student profile:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 export const emailRegister = async (req, res) => {
   try {
     const { email } = req.body;
@@ -115,10 +173,6 @@ export const emailRegister = async (req, res) => {
   }
 };
 
-
-
-
-
 export const studentSignup = async (req, res) => {
   try {
     const {
@@ -140,28 +194,6 @@ export const studentSignup = async (req, res) => {
       leadOwner,
       onBoarding
     } = req.body;
-
-
-    console.log("Received student signup data:", req.body);
-
-
-
-    // if (
-    //   !FirstName ||
-    //   !LastName ||
-    //   !email ||
-    //   !password ||
-    //   !countryCode ||
-    //   !phoneNumber ||
-    //   !schoolName ||
-    //   !country ||
-    //   !state ||
-    //   !dateofBirth ||
-    //   !Nationality ||
-    //   !Gender
-    // ) {
-    //   return res.status(400).json({ message: "All required fields must be filled" });
-    // }
 
     if (
       !email ||
@@ -203,12 +235,6 @@ export const studentSignup = async (req, res) => {
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
     }
-
-    // 🔹 6. Check for duplicate phone
-    // const existingPhone = await Student.findOne({ phoneNumber, countryCode });
-    // if (existingPhone) {
-    //   return res.status(409).json({ message: "Phone number already registered" });
-    // }
 
     // 🔹 7. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
