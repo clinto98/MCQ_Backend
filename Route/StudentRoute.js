@@ -15,6 +15,5 @@ router.post('/verifyOtp', verifyOtp)
 router.post('/userPreferences/:studentId', updateUserPreferences);
 router.post('/UpdateStudentProfile/:studentId', updateStudentProfile)
 
-
 export default router;
 

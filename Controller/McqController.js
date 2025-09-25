@@ -753,55 +753,97 @@ export const createTimeQuiz = async (req, res) => {
 };
 
 
+
 export const checkTimeAnswerById = async (req, res) => {
   try {
-    const { questionId } = req.params;
+    const { questionId } = req.params; // string
     const { userAnswer, userId } = req.body;
 
     if (!questionId || !userAnswer || !userId) {
-      return res.status(400).json({ message: "questionId, userAnswer and userId are required" });
+      return res.status(400).json({
+        message: "questionId, userAnswer and userId are required",
+      });
     }
 
+    // ✅ Get the actual question from master collection
+    const question = await twelve.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    const isCorrect =
+      question.correctAnswer.trim().toLowerCase() ===
+      userAnswer.trim().toLowerCase();
+
+    // ✅ Find active quiz
     const quiz = await TimeQuestions.findOne({ userId, isActive: true });
     if (!quiz) {
-      return res.status(404).json({ message: "Active timed quiz not found" });
+      return res.status(404).json({ message: "Active quiz not found" });
     }
 
-    const section = quiz.sections[quiz.currentQuestion.sectionIndex];
-    if (!section) {
-      return res.status(404).json({ message: "Section not found" });
+    // ✅ Locate the question: prefer current pointer, otherwise search across sections
+    let { sectionIndex, questionIndex } = quiz.currentQuestion;
+    let section = quiz.sections[sectionIndex];
+    let currentQ = section?.questions?.[questionIndex];
+
+    if (!currentQ || currentQ.questionId.toString() !== questionId.toString()) {
+      let found = null;
+      for (let sIdx = 0; sIdx < quiz.sections.length; sIdx++) {
+        const sec = quiz.sections[sIdx];
+        for (let qIdx = 0; qIdx < sec.questions.length; qIdx++) {
+          const q = sec.questions[qIdx];
+          if (q.questionId.toString() === questionId.toString()) {
+            found = { sectionIndex: sIdx, questionIndex: qIdx, section: sec, question: q };
+            break;
+          }
+        }
+        if (found) break;
+      }
+
+      if (!found) {
+        return res.status(404).json({ message: "Question not found in quiz" });
+      }
+
+      sectionIndex = found.sectionIndex;
+      questionIndex = found.questionIndex;
+      section = found.section;
+      currentQ = found.question;
     }
 
-    const question = section.questions[quiz.currentQuestion.questionIndex];
-    if (!question || question.questionId.toString() !== questionId) {
-      return res.status(404).json({ message: "Question not found in current quiz" });
-    }
+    // ✅ Update question
+    currentQ.status = isCorrect ? "correct" : "incorrect";
+    currentQ.attempts += 1;
+    currentQ.answeredAt = new Date();
 
-    const fullQuestion = await twelve.findById(questionId).select("_id question options correctAnswer");
-    if (!fullQuestion) {
-      return res.status(404).json({ message: "Question details not found" });
-    }
-
-    const isCorrect = fullQuestion.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
-
-    // Check wrong answers limit
-    if (!isCorrect && quiz.progress.wrongAnswers >= quiz.WrongQuestionsLimit) {
-      return res.status(400).json({ message: "Wrong answers limit exceeded" });
-    }
-
-    // Update question status
-    question.status = isCorrect ? "correct" : "incorrect";
-    question.attempts += 1;
-    question.answeredAt = new Date();
-
-    // Update progress
+    // ✅ Update progress
     quiz.progress.completedQuestions += 1;
     if (isCorrect) quiz.progress.correctAnswers += 1;
     else quiz.progress.wrongAnswers += 1;
 
-    // Move to next question or complete quiz
-    let nextSectionIndex = quiz.currentQuestion.sectionIndex;
-    let nextQuestionIndex = quiz.currentQuestion.questionIndex + 1;
+    // ✅ Enforce wrong answers limit if configured
+    if (
+      typeof quiz.WrongQuestionsLimit === "number" &&
+      quiz.WrongQuestionsLimit > 0 &&
+      quiz.progress.wrongAnswers >= quiz.WrongQuestionsLimit
+    ) {
+      quiz.progress.status = "completed";
+      quiz.isActive = false;
+      await quiz.save();
+      return res.status(400).json({
+        message: "Wrong answer limit exceeded",
+        questionId: question._id,
+        userAnswer,
+        isCorrect,
+        correctAnswer: isCorrect ? undefined : question.correctAnswer,
+        progress: quiz.progress,
+        currentQuestion: null,
+        quiz,
+      });
+    }
+
+    // ✅ Move pointer to next question
+    let nextSectionIndex = sectionIndex;
+    let nextQuestionIndex = questionIndex + 1;
 
     if (nextQuestionIndex >= section.questions.length) {
       nextSectionIndex += 1;
@@ -809,7 +851,6 @@ export const checkTimeAnswerById = async (req, res) => {
     }
 
     if (nextSectionIndex >= quiz.sections.length) {
-      // All completed
       quiz.progress.status = "completed";
       quiz.isActive = false;
       quiz.currentQuestion = { sectionIndex: 0, questionIndex: 0 };
@@ -824,25 +865,25 @@ export const checkTimeAnswerById = async (req, res) => {
     await quiz.save();
 
     return res.status(200).json({
-      message: "Answer checked successfully",
-      questionId: fullQuestion._id,
+      message: "Answer checked and quiz updated",
+      questionId: question._id,
       userAnswer,
       isCorrect,
-      correctAnswer: isCorrect ? undefined : fullQuestion.correctAnswer,
+      correctAnswer: isCorrect ? undefined : question.correctAnswer,
       progress: quiz.progress,
       currentQuestion: quiz.isActive
-        ? quiz.sections[quiz.currentQuestion.sectionIndex].questions[quiz.currentQuestion.questionIndex]
+        ? quiz.sections[quiz.currentQuestion.sectionIndex].questions[
+            quiz.currentQuestion.questionIndex
+          ]
         : null,
     });
-
   } catch (error) {
     console.error("Error in checkTimeAnswerById:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
   }
 };
-
-
-
 
 export const getTimedQuiz = async (req, res) => {
   try {

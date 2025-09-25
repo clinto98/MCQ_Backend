@@ -522,10 +522,12 @@ export const getRandomQuestion = async (req, res) => {
 
 export const createMissedQuestions = async (req, res) => {
   try {
+    const { userId, subject, syllabus , standard } = req.body;
+    
     if (!req.body) {
       return res.status(400).json({ message: "Request body is missing" });
     }
-    const { userId, subject, syllabus , standard } = req.body;
+    
 
     if (!userId || !subject || !syllabus || !standard) {
       return res.status(400).json({ message: "User ID, subject, syllabus, and standard are required" });
@@ -569,7 +571,7 @@ export const createMissedQuestions = async (req, res) => {
 
     // ✅ Upsert into MissedQuestions
     const missedSession = await MissedQuestions.findOneAndUpdate(
-      { userId, subject, syllabus, standard, isActive: true },
+      { userId, subject, syllabus, Standerd: standard, isActive: true },
       {
         userId,
         subject,
