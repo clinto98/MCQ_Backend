@@ -425,8 +425,7 @@ export const flagQuestion = async (req, res) => {
     } else {
       // Check if the question already exists
       const exists = flaggedDoc.questions.some(q =>
-        q.questionId.equals(questionObjectId) &&
-        q.courseId.equals(courseObjectId)
+        q.questionId.equals(questionObjectId)
       );
 
       if (exists) {
@@ -461,6 +460,75 @@ export const flagQuestion = async (req, res) => {
 
   } catch (error) {
     console.error("flagQuestion error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+// ✅ Unflag Question Controller
+export const unflagQuestion = async (req, res) => {
+  try {
+    const { userId, questionId } = req.body;
+
+    if (!userId || !questionId) {
+      return res.status(400).json({ message: "userId and questionId are required" });
+    }
+
+    const questionObjectId = new mongoose.Types.ObjectId(questionId);
+
+    // Find the flagged document for this user
+    let flaggedDoc = await FlaggedQuestion.findOne({ userId });
+    if (!flaggedDoc) {
+      return res.status(404).json({ message: "No flagged questions found for this user" });
+    }
+
+    // Find index of question in flagged list
+    const qIndex = flaggedDoc.questions.findIndex((q) =>
+      q.questionId.equals(questionObjectId)
+    );
+
+    if (qIndex === -1) {
+      return res.status(404).json({ message: "Question not found in flagged list" });
+    }
+
+    // Remove the question
+    flaggedDoc.questions.splice(qIndex, 1);
+
+    // Reassign indexes for remaining questions
+    flaggedDoc.questions.forEach((q, idx) => {
+      q.index = idx;
+    });
+
+    // If the removed question was the current one, update currentQuestion
+    if (
+      flaggedDoc.currentQuestion &&
+      flaggedDoc.currentQuestion.questionId?.toString() === questionObjectId.toString()
+    ) {
+      if (flaggedDoc.questions.length > 0) {
+        flaggedDoc.currentQuestion = {
+          index: 0,
+          questionId: flaggedDoc.questions[0].questionId,
+        };
+      } else {
+        flaggedDoc.currentQuestion = { index: 0, questionId: null };
+      }
+    }
+
+    // If no questions remain, deactivate the flagged session
+    if (flaggedDoc.questions.length === 0) {
+      flaggedDoc.isActive = false;
+      flaggedDoc.progress.status = "not_started";
+      flaggedDoc.currentQuestion = { index: 0, questionId: null };
+    }
+
+    await flaggedDoc.save();
+
+    return res.status(200).json({
+      message: "Question unflagged successfully.",
+      flaggedQuestion: flaggedDoc,
+    });
+  } catch (error) {
+    console.error("unflagQuestion error:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
