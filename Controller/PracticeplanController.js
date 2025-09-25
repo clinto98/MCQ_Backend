@@ -331,9 +331,9 @@ export const getRandomQuestion = async (req, res) => {
 
     console.log("Request body:", req.body);
 
-    console.log("userId:", userId, "subject:", subject,"syllabus",syllabus,"standard",standard);
-    
-    
+    console.log("userId:", userId, "subject:", subject, "syllabus", syllabus, "standard", standard);
+
+
 
     // === VALIDATION ===
     if (!userId || !subject || !syllabus || !standard) {
@@ -353,7 +353,7 @@ export const getRandomQuestion = async (req, res) => {
       standard,
       isActive: true,
     });
-     console.log("datastoring",existingSession);
+    console.log("datastoring", existingSession);
 
     if (existingSession) {
       // collect all question IDs from the session
@@ -364,8 +364,8 @@ export const getRandomQuestion = async (req, res) => {
       ];
 
 
-      console.log("datastoring",existingSession);
-      
+      console.log("datastoring", existingSession);
+
       // fetch question details once and map by id (lean for plain objects)
       const fullQuestions = await twelve
         .find({ _id: { $in: allIds } })
@@ -394,8 +394,8 @@ export const getRandomQuestion = async (req, res) => {
           section === 1
             ? existingSession.Section1
             : section === 2
-            ? existingSession.Section2
-            : existingSession.Section3;
+              ? existingSession.Section2
+              : existingSession.Section3;
         current = arr && arr[questionIndex] ? (arr[questionIndex].toObject ? arr[questionIndex].toObject() : arr[questionIndex]) : null;
         if (current) {
           const d = fqMap.get(current.questionId.toString());
@@ -522,65 +522,117 @@ export const getRandomQuestion = async (req, res) => {
 
 export const createMissedQuestions = async (req, res) => {
   try {
-    const { userId, subject, syllabus , standard } = req.body;
-    
     if (!req.body) {
       return res.status(400).json({ message: "Request body is missing" });
     }
-    
+    const { userId, subject, syllabus, standard } = req.body;
 
     if (!userId || !subject || !syllabus || !standard) {
       return res.status(400).json({ message: "User ID, subject, syllabus, and standard are required" });
     }
 
-    // ✅ Collect all incorrect questions from all models
-    const allIncorrects = [];
+    // ✅ Gather incorrect questions across all sources (active or completed)
+    const collected = [];
 
-    const models = [RandomQuestions, FlaggedQuestion, MockQuestions, PreviousyearQuestions, PracticePlan];
-
-    for (const Model of models) {
-      const sessions = await Model.find({ userId, subject, isActive: true });
-
-      console.log("data", sessions);
-
-
-      for (const session of sessions) {
-        const sections = ["Section1", "Section2", "Section3"];
-
-        for (const section of sections) {
-          if (Array.isArray(session[section])) {
-            const incorrects = session[section].filter(
-              (q) => q.status === "incorrect"
-            ).map((q, index) => ({
-              questionId: q.questionId,
-              index: index + 1,
-              status: q.status,
-              answeredAt: q.answeredAt,
-              attempts: q.attempts,
-            }));
-
-            allIncorrects.push(...incorrects);
-          }
+    const pushIncorrect = (arr, onlyActive = true) => {
+      if (!Array.isArray(arr)) return;
+      for (let q of arr) {
+        if (q && q.status === "incorrect") {
+          collected.push({
+            questionId: q.questionId,
+            index: typeof q.index === "number" ? q.index : (typeof q.number === "number" ? q.number : null),
+            status: q.status,
+            answeredAt: q.answeredAt || null,
+            attempts: q.attempts || 0,
+          });
         }
       }
+    };
+
+    // RandomQuestions: fields match subject/syllabus/standard
+    const randomSessions = await RandomQuestions.find({
+      userId,
+      subject,
+      syllabus,
+      standard,
+      isActive: true
+    }).lean();
+
+     console.log("randomSessions", randomSessions);
+     
+    for (const s of randomSessions) {
+      pushIncorrect(s.Section1);
+      pushIncorrect(s.Section2);
+      pushIncorrect(s.Section3);
+    }
+    // MockQuestions: note Standard (capital S)
+    const mockSessions = await MockQuestions.find({ userId, subject, syllabus, Standard: standard }).lean();
+    for (const s of mockSessions) pushIncorrect(s.questions);
+
+    console.log("mockSessions", mockSessions);
+    
+
+    // FlaggedQuestion: no subject on session; collect all and filter later by question doc
+    const flaggedSessions = await FlaggedQuestion.find({ userId }).lean();
+    for (const s of flaggedSessions) pushIncorrect(s.questions);
+
+    // PreviousyearQuestions: subject likely present
+    const previousYearSessions = await PreviousyearQuestions.find({ userId, subject }).lean();
+    for (const s of previousYearSessions) pushIncorrect(s.questions);
+
+    // PracticePlan: preferences carry subject/syllabus/standard
+    const practicePlans = await PracticePlan.find({
+      userId,
+      "preferences.subject": subject,
+      "preferences.syllabus": syllabus,
+      "preferences.standard": standard,
+    }).lean();
+    for (const p of practicePlans) {
+      pushIncorrect(p.Section1);
+      pushIncorrect(p.Section2);
+      pushIncorrect(p.Section3);
     }
 
-    if (allIncorrects.length === 0) {
+    if (collected.length === 0) {
       return res.status(200).json({ message: "No missed questions found" });
     }
 
+    // ✅ Filter by actual question metadata in master (ensures correct subject/syllabus/standard)
+    const ids = Array.from(new Set(collected.map((x) => String(x.questionId)).filter(Boolean)));
+    let eligible = new Set();
+    if (ids.length > 0) {
+      const eligibleDocs = await twelve
+        .find({ _id: { $in: ids }, subject, syllabus, Standard: String(standard)  })
+        .select("_id")
+        .lean();
+      eligible = new Set(eligibleDocs.map((d) => String(d._id)));
+    }
+
+    const filtered = collected.filter((x) => eligible.has(String(x.questionId)));
+    if (filtered.length === 0) {
+      return res.status(200).json({ message: "No missed questions found" });
+    }
+
+    // ✅ De-duplicate by questionId, keep earliest occurrence
+    const uniqMap = new Map();
+    for (const item of filtered) {
+      const key = String(item.questionId);
+      if (!uniqMap.has(key)) uniqMap.set(key, item);
+    }
+    const uniqueIncorrects = Array.from(uniqMap.values());
+
     // ✅ Upsert into MissedQuestions
     const missedSession = await MissedQuestions.findOneAndUpdate(
-      { userId, subject, syllabus, Standerd: standard, isActive: true },
+      { userId, subject, syllabus, standard, isActive: true },
       {
         userId,
         subject,
         syllabus,
         standard,
-        questions: allIncorrects,
+        questions: uniqueIncorrects,
         currentQuestion: {
           index: 0,
-          questionId: allIncorrects[0].questionId,
+          questionId: uniqueIncorrects[0].questionId,
         },
         progress: {
           completedQuestions: 0,
@@ -598,10 +650,9 @@ export const createMissedQuestions = async (req, res) => {
       subject,
       syllabus,
       standard,
-      totalMissed: allIncorrects.length,
+      totalMissed: uniqueIncorrects.length,
       sessionId: missedSession._id,
     });
-
   } catch (error) {
     console.error("Error creating missed questions:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -610,8 +661,8 @@ export const createMissedQuestions = async (req, res) => {
 
 export const getMissedQuestions = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { subject , syllabus , standard  } = req.body;
+    
+    const { userId , subject, syllabus, standard } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });
@@ -679,11 +730,11 @@ export const getMissedQuestions = async (req, res) => {
       const cur = getById(session.currentQuestion.questionId);
       currentQuestion = cur
         ? {
-            index: session.currentQuestion.index,
-            question: cur.question,
-            options: normalizeOptions(cur.options || []),
-            correctAnswer: cur.correctAnswer,
-          }
+          index: session.currentQuestion.index,
+          question: cur.question,
+          options: normalizeOptions(cur.options || []),
+          correctAnswer: cur.correctAnswer,
+        }
         : null;
     }
 
@@ -791,7 +842,7 @@ export const checkMissedAnswer = async (req, res) => {
 
 export const createRandomQuestions = async (req, res) => {
   try {
-    const { userId, subject , syllabus , standard } = req.body;
+    const { userId, subject, syllabus, standard } = req.body;
 
     if (!userId || !subject) {
       return res.status(400).json({ message: "User ID and subject are required" });
