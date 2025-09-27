@@ -130,6 +130,43 @@ export const updateStudentProfile = async (req, res) => {
 };
 
 
+
+export const getStudentProfile = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId) {
+      return res.status(400).json({ message: "Student ID is required" });
+    }
+
+    const student = await Student.findById(studentId).select(
+      "FullName email phoneNumber countryCode state dateofBirth Nationality"
+    );
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    return res.status(200).json({
+      message: "Student profile fetched successfully",
+      student: {
+        id: student._id,
+        FullName: student.FullName,
+        email: student.email,
+        phoneNumber: student.phoneNumber,
+        countryCode: student.countryCode,
+        state: student.state,
+        dateofBirth: student.dateofBirth,
+        Nationality: student.Nationality,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching student profile:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 export const emailRegister = async (req, res) => {
   try {
     const { email } = req.body;
