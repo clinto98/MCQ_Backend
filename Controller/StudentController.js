@@ -12,20 +12,10 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const studentRegisterGoogle = async (req, res) => {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      return res.status(400).json({ message: "ID token is required" });
+    const { email , fullName  } = req.body;
+    if (!email , !fullName) {
+      return res.status(400).json({ message: "Email and fullName required" });
     }
-
-    const ticket = await client.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    const email = payload.email;
-    const fullName = payload.name;
-
     let student = await Student.findOne({ email });
 
     if (!student) {
