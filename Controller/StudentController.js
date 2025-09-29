@@ -7,6 +7,7 @@ import { sendOtpEmail } from "../helper/mailer.js";
 import connectDB from "../Database/connectDB.js";
 
 
+
 dotenv.config();
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -261,7 +262,7 @@ export const studentSignup = async (req, res) => {
 
 
      
-    
+
     await connectDB();
 
     const existingEmail = await Student.findOne({ email });
