@@ -100,7 +100,7 @@ export const enrollCourses = async (req, res) => {
 // Get enrollment details
 export const getEnrollment = async (req, res) => {
   try {
-    const { studentId } = req.params;
+    const { studentId } = req.body;
 
     const enrollment = await Enrollment.findOne({ studentId })
       .populate("enrolledCourses.courseId", "title description");
