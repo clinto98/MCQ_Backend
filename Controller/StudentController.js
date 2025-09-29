@@ -260,11 +260,6 @@ export const studentSignup = async (req, res) => {
       return res.status(400).json({ message: "Password mismatch" })
     }
 
-
-     
-
-    await connectDB();
-
     const existingEmail = await Student.findOne({ email });
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
