@@ -171,7 +171,17 @@ export const checkMockAnswerById = async (req, res) => {
     else quiz.progress.wrongAnswers += 1;
 
     // Move current question to next one
+    // Move current question to next one
     let nextIndex = idx + 1;
+
+    // 🔹 Find next unanswered question instead of just idx+1
+    while (
+      nextIndex < quiz.questions.length &&
+      quiz.questions[nextIndex].status
+    ) {
+      nextIndex++;
+    }
+
     if (nextIndex >= quiz.questions.length) {
       // All done
       quiz.progress.status = "completed";
@@ -184,6 +194,7 @@ export const checkMockAnswerById = async (req, res) => {
         questionId: quiz.questions[nextIndex].questionId,
       };
     }
+
 
     await quiz.save();
 
@@ -217,7 +228,7 @@ export const MockBattle = async (req, res) => {
     if (!StudentId || !Subject || !Standard || !syllabus || !topic || !Array.isArray(topic) || topic.length === 0) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
     }
-    const existingCount = await MockQuestions.countDocuments({ userId: StudentId, subject: Subject,syllabus,Standard, isActive: true });
+    const existingCount = await MockQuestions.countDocuments({ userId: StudentId, subject: Subject, syllabus, Standard, isActive: true });
     if (existingCount > 0) {
       return res.status(201).json({ message: "You already have an active mock quiz. Please complete it before starting a new one." });
     }
@@ -313,7 +324,7 @@ export const MockBattle = async (req, res) => {
 
 export const getMockQuestions = async (req, res) => {
   try {
-    const {userId, subject , syllabus , Standard } = req.body;
+    const { userId, subject, syllabus, Standard } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });
@@ -321,8 +332,8 @@ export const getMockQuestions = async (req, res) => {
 
     // Find the active mock quiz for the user and subject
     const quiz = await MockQuestions.findOne({ userId, subject, syllabus, Standard, isActive: true });
-    console.log("quiz",quiz);
-    
+    console.log("quiz", quiz);
+
     if (!quiz) {
       return res.status(404).json({ message: "Active mock quiz not found for this subject" });
     }
@@ -388,13 +399,13 @@ export const flagQuestion = async (req, res) => {
     const { userId, questionId } = req.body;
 
     // Validate input
-    if (!userId || !questionId ) {
+    if (!userId || !questionId) {
       return res.status(400).json({ message: "Some fields are missing or invalid" });
     }
 
     // Convert IDs to ObjectId
     const questionObjectId = new mongoose.Types.ObjectId(questionId);
-   
+
 
     // Find if a flagged question document exists for this user
     let flaggedDoc = await FlaggedQuestion.findOne({ userId });
@@ -873,8 +884,8 @@ export const checkTimeAnswerById = async (req, res) => {
       progress: quiz.progress,
       currentQuestion: quiz.isActive
         ? quiz.sections[quiz.currentQuestion.sectionIndex].questions[
-            quiz.currentQuestion.questionIndex
-          ]
+        quiz.currentQuestion.questionIndex
+        ]
         : null,
     });
   } catch (error) {
