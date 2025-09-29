@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
 import { OAuth2Client } from 'google-auth-library';
 import { sendOtpEmail } from "../helper/mailer.js";
+import connectDB from "../Database/connectDB.js";
 
 
 dotenv.config();
@@ -261,7 +262,7 @@ export const studentSignup = async (req, res) => {
 
      
     await connectDB();
-    
+
     const existingEmail = await Student.findOne({ email });
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
