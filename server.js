@@ -11,8 +11,7 @@ import PaymentRoute from "./Route/PaymentRoute.js"
 import TodaysQuestionRoute from "./Route/TodaysQuestionRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import ConnectDB from "./Database/ConnectDB.js";
-
+import ConnectDB from "./Database/db.js";
 
 await ConnectDB();
 
