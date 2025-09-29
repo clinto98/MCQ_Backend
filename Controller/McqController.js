@@ -118,13 +118,10 @@ export const createBulkTwelfthQuestions = async (req, res) => {
 export const checkMockAnswerById = async (req, res) => {
   try {
     const { questionId } = req.params;
-
-    console.log("question", req.params);
-
     const { userAnswer, userId } = req.body;
 
+    console.log("question", req.params);
     console.log("body", req.body);
-
 
     if (!questionId || !userAnswer || !userId) {
       return res.status(400).json({
@@ -140,7 +137,6 @@ export const checkMockAnswerById = async (req, res) => {
 
     console.log("question", question);
 
-
     // Check correctness
     const isCorrect =
       question.correctAnswer.trim().toLowerCase() ===
@@ -152,7 +148,7 @@ export const checkMockAnswerById = async (req, res) => {
       return res.status(404).json({ message: "Active quiz not found" });
     }
 
-    // Update the question status in the quiz
+    // Find the question index inside quiz
     const idx = quiz.questions.findIndex(
       (q) => q.questionId.toString() === questionId.toString()
     );
@@ -171,30 +167,33 @@ export const checkMockAnswerById = async (req, res) => {
     else quiz.progress.wrongAnswers += 1;
 
     // Move current question to next one
-    // Move current question to next one
     let nextIndex = idx + 1;
 
-    // 🔹 Find next unanswered question instead of just idx+1
+    // 🔹 Skip already answered questions
     while (
       nextIndex < quiz.questions.length &&
-      quiz.questions[nextIndex].status
+      quiz.questions[nextIndex].status &&
+      quiz.questions[nextIndex].status !== "pending"
     ) {
       nextIndex++;
     }
 
-    if (nextIndex >= quiz.questions.length) {
-      // All done
+    // ✅ Check if all questions are answered
+    const allAnswered = quiz.questions.every(
+      (q) => q.status && q.status !== "pending"
+    );
+
+    if (allAnswered) {
       quiz.progress.status = "completed";
       quiz.isActive = false;
-      quiz.currentQuestion = { index: nextIndex, questionId: null };
+      quiz.currentQuestion = { index: quiz.questions.length, questionId: null };
     } else {
       quiz.progress.status = "in_progress";
       quiz.currentQuestion = {
         index: nextIndex,
-        questionId: quiz.questions[nextIndex].questionId,
+        questionId: quiz.questions[nextIndex]?.questionId || null,
       };
     }
-
 
     await quiz.save();
 
@@ -209,9 +208,12 @@ export const checkMockAnswerById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in checkMockAnswerById:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
   }
 };
+
 
 
 export const MockBattle = async (req, res) => {
