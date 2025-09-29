@@ -1,6 +1,5 @@
 import PreviousQuestionPaper from "../Models/QuestionPaperModel.js";
 import PreviousyearQuestions from "../Models/Previousyearquestion.js";
-import twelve from "../Models/McqModel.js"
 
 // Generate a previous-year session with 3 sections based on filters
 export const generatePreviousYearSession = async (req, res) => {

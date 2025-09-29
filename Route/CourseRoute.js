@@ -1,6 +1,5 @@
 import express from "express";
 import { createCourse, enrollCourses, getAllCoursesforHighersecondary, getEnrollment } from "../Controller/CourseController.js";
-import { protectRoute } from "../Middileware/VerifyToken.js";
 
 
 const router = express.Router();
