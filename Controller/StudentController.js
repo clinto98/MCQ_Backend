@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
 import { OAuth2Client } from 'google-auth-library';
 import { sendOtpEmail } from "../helper/mailer.js";
-import connectDB from "../Database/ConnectDB.js";
+
 
 
 
