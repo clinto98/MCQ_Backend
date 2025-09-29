@@ -261,6 +261,7 @@ export const studentSignup = async (req, res) => {
 
 
      
+    
     await connectDB();
 
     const existingEmail = await Student.findOne({ email });
