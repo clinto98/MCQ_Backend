@@ -15,6 +15,7 @@ import cookieParser from "cookie-parser";
 import connectDB from "./Database/connectDB.js";
 
 
+await connectDB();
 
 const app = express();
 
@@ -49,8 +50,7 @@ app.use('/api/payment', PaymentRoute)
 app.use('/api/todaysquestion', TodaysQuestionRoute);
 
 
-app.listen(PORT, async () => {
-    await connectDB();
+app.listen(PORT,  () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
