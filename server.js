@@ -12,6 +12,7 @@ import PaymentRoute from "./Route/PaymentRoute.js"
 import TodaysQuestionRoute from "./Route/TodaysQuestionRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import connectDB from "./Database/ConnectDB.js";
 
 
 
@@ -49,7 +50,7 @@ app.use('/api/todaysquestion', TodaysQuestionRoute);
 
 
 app.listen(PORT, () => {
-    ConnectDB();
+    connectDB();
     console.log(`Server is running on port ${PORT}`);
 });
 

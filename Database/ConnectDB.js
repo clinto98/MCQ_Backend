@@ -1,13 +1,33 @@
 import mongoose from "mongoose";
+import dotenv from "dotenv";
 
-const ConnectDB = async () => {
-    try {
-        await mongoose.connect(process.env.MONGODB_URI)
-        console.log(process.env.MONGODB_URI);
-        console.log('Db connected');
+dotenv.config();
 
-    } catch (error) {
-        console.log('Unable to collect', error.message);
-    }
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error("MONGODB_URI is not defined in environment variables");
 }
-export default ConnectDB
+
+// Global cache for MongoDB connection (prevents multiple connections in Vercel)
+// @ts-expect-error: Mongoose is not defined
+const cached = global.mongoose || { conn: null, promise: null };
+
+const connectDB = async () => {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI).then((value) => value);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+};
+
+// Store cache globally (Vercel-specific optimization)
+// @ts-expect-error: Mongoose is not defined
+global.mongoose = cached;
+
+export default connectDB;
