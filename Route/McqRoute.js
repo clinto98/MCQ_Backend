@@ -1,5 +1,5 @@
 import express from "express";
-import { checkFlaggedAnswerById, checkMockAnswerById, checkTimeAnswerById, createBulkTwelfthQuestions, createTimeQuiz, createTwelfthQuestion, flagQuestion, getAllFlaggedQuestions, getMockQuestions, getTimedQuiz, MockBattle, submitTimeAnswer, unflagQuestion } from "../Controller/Mcqcontroller.js";
+import { checkFlaggedAnswerById, checkMockAnswerById, checkTimeAnswerById, createBulkTwelfthQuestions, createTimeQuiz, createTwelfthQuestion, flagQuestion, getAllFlaggedQuestions, getMockQuestions, getTimedQuiz, MockBattle, submitTimeAnswer, unflagQuestion } from "../Controller/McqController.js";
 
 
 
