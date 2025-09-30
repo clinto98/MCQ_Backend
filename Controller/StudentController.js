@@ -291,8 +291,11 @@ export const studentSignup = async (req, res) => {
 
     await newStudent.save();
 
+    const token = generateToken(newStudent);
+
     return res.status(201).json({
       message: "Student registered successfully",
+      token,
       student: {
         id: newStudent._id,
         FullName: newStudent.FullName,
@@ -352,7 +355,6 @@ export const studentLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if both fields exist
     if (!email || !password) {
       return res.status(400).json({ message: "Email and Password are required" });
     }
@@ -380,18 +382,24 @@ export const studentLogin = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "None",
-      maxAge: 15 * 24 * 60 * 60 * 1000, // 15 days
+      maxAge: 15 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ Fetch enrollment details
+    // ✅ Fetch enrollment and populate ALL enrolledCourses
     const enrollment = await Enrollment.findOne({ studentId: student._id })
-      .populate("enrolledCourses.courseId", "title")
-      .lean();
+      .populate({
+        path: "enrolledCourses.courseId",
+        model: "Course",
+        select: "title",
+      });
 
-    // Prepare enrolled courses safely
+      console.log("enrollement", enrollment);
+      
+
+    // Prepare enrolled courses
     const enrolledCourses = enrollment
       ? enrollment.enrolledCourses
-          .filter(ec => ec.courseId) // skip if courseId is null
+          .filter(ec => ec.courseId) // only valid courses
           .map(ec => ({
             id: ec.courseId._id,
             title: ec.courseId.title,
@@ -399,19 +407,21 @@ export const studentLogin = async (req, res) => {
           }))
       : [];
 
+      console.log("enrolledCourses", enrolledCourses);
+      
+
     const preferredSubjects = enrollment ? enrollment.preferredSubjects : [];
 
-    // Successful login response
     res.status(200).json({
       message: "Login successful",
-      token: token,
+      token,
       student: {
         id: student._id,
         firstName: student.FirstName,
         lastName: student.LastName,
         email: student.email,
       },
-      enrolledCourses,
+      enrolledCourses,   // ✅ now should include BOTH
       preferredSubjects,
     });
   } catch (error) {
@@ -419,6 +429,7 @@ export const studentLogin = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
