@@ -12,21 +12,16 @@ export const generatePersonalizedMcq = async (req, res) => {
       subject,
       syllabus,
       standard,
-
       // Topic filtering
       selectedTopics = [],
-
       // Previous year questions
       includePreviousYear = false,
       previousYearYears = [],
-
       // Difficulty filtering
       difficultyLevels = ["easy", "medium", "hard"],
-
       // Exam simulation mode
       examSimulationMode = false,
       examDuration = 180, // minutes
-
       // Attempted questions filtering
       includeAttemptedQuestions = false,
       attemptedFilter = {
@@ -34,7 +29,6 @@ export const generatePersonalizedMcq = async (req, res) => {
         incorrect: false,
         flagged: false,
       },
-
       // Question count configuration
       totalQuestions,
       questionDistribution = {
