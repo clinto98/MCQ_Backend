@@ -2,6 +2,7 @@ import Student from "../Models/StudentModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
+import Enrollment from "../Models/EnrollmentModel.js";
 import { OAuth2Client } from 'google-auth-library';
 import { sendOtpEmail } from "../helper/mailer.js";
 
@@ -356,39 +357,51 @@ export const studentLogin = async (req, res) => {
       return res.status(400).json({ message: "Email and Password are required" });
     }
 
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-
+    // Find student
     const student = await Student.findOne({ email });
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-
+    // Validate password
     const isMatch = await bcrypt.compare(password, student.password);
-
-
-
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-
+    // Generate JWT token
     const token = generateToken(student);
     res.cookie("jwt", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
-      sameSite: "None", // ✅ required for cross-origin cookies
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "None",
       maxAge: 15 * 24 * 60 * 60 * 1000, // 15 days
     });
 
+    // ✅ Fetch enrollment details
+    const enrollment = await Enrollment.findOne({ studentId: student._id })
+      .populate("enrolledCourses.courseId", "title")
+      .lean();
 
+    // Prepare enrolled courses safely
+    const enrolledCourses = enrollment
+      ? enrollment.enrolledCourses
+          .filter(ec => ec.courseId) // skip if courseId is null
+          .map(ec => ({
+            id: ec.courseId._id,
+            title: ec.courseId.title,
+            enrollmentDate: ec.enrollmentDate,
+          }))
+      : [];
 
-    // Successful login
+    const preferredSubjects = enrollment ? enrollment.preferredSubjects : [];
+
+    // Successful login response
     res.status(200).json({
       message: "Login successful",
       token: token,
@@ -398,12 +411,15 @@ export const studentLogin = async (req, res) => {
         lastName: student.LastName,
         email: student.email,
       },
+      enrolledCourses,
+      preferredSubjects,
     });
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 export const studentLogout = (req, res) => {
