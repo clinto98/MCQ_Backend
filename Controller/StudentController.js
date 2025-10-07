@@ -226,22 +226,17 @@ export const studentSignup = async (req, res) => {
       onBoarding
     } = req.body;
 
-    if (
-      !email ||
-      !password ||
-      !confirmPassword
-
-    ) {
-      return res.status(400).json({ message: "All required feilds must be filled" })
+    if (!email || !password || !confirmPassword) {
+      return res.status(400).json({ message: "All required fields must be filled" });
     }
 
-
+    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-
+    // Validate password format
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(password)) {
@@ -251,25 +246,20 @@ export const studentSignup = async (req, res) => {
       });
     }
 
-
-    // const phoneRegex = /^[0-9]{7,15}$/;
-    // if (!phoneRegex.test(phoneNumber)) {
-    //   return res.status(400).json({ message: "Invalid phone number format" });
-    // }
-
     if (password !== confirmPassword) {
-      return res.status(400).json({ message: "Password mismatch" })
+      return res.status(400).json({ message: "Password mismatch" });
     }
 
+    // Check existing email
     const existingEmail = await Student.findOne({ email });
     if (existingEmail) {
       return res.status(409).json({ message: "Email already registered" });
     }
 
-    // 🔹 7. Hash password
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🔹 8. Create new student
+    // Create and save new student
     const newStudent = new Student({
       FullName,
       email,
@@ -289,10 +279,11 @@ export const studentSignup = async (req, res) => {
       onBoarding
     });
 
-    await newStudent.save();
+    await newStudent.save(); // ✅ ensures _id is created
 
+    // ✅ Generate token AFTER saving
     const token = generateToken(newStudent);
-
+    
     return res.status(201).json({
       message: "Student registered successfully",
       token,
@@ -304,7 +295,7 @@ export const studentSignup = async (req, res) => {
         schoolName: newStudent.schoolName,
         country: newStudent.country,
         state: newStudent.state,
-        onBoarding: newStudent.onBoarding
+        onBoarding: newStudent.onBoarding,
       },
     });
   } catch (error) {
@@ -312,6 +303,7 @@ export const studentSignup = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 
 export const updateStudentStandard = async (req, res) => {
@@ -393,22 +385,22 @@ export const studentLogin = async (req, res) => {
         select: "title",
       });
 
-      console.log("enrollement", enrollment);
-      
+    console.log("enrollement", enrollment);
+
 
     // Prepare enrolled courses
     const enrolledCourses = enrollment
       ? enrollment.enrolledCourses
-          .filter(ec => ec.courseId) // only valid courses
-          .map(ec => ({
-            id: ec.courseId._id,
-            title: ec.courseId.title,
-            enrollmentDate: ec.enrollmentDate,
-          }))
+        .filter(ec => ec.courseId) // only valid courses
+        .map(ec => ({
+          id: ec.courseId._id,
+          title: ec.courseId.title,
+          enrollmentDate: ec.enrollmentDate,
+        }))
       : [];
 
-      console.log("enrolledCourses", enrolledCourses);
-      
+    console.log("enrolledCourses", enrolledCourses);
+
 
     const preferredSubjects = enrollment ? enrollment.preferredSubjects : [];
 

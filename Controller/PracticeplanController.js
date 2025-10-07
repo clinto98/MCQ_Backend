@@ -5,6 +5,7 @@ import MissedQuestions from '../Models/MissedquestionsModel.js'
 import FlaggedQuestion from '../Models/FlaggedquestionsModel.js'
 import MockQuestions from '../Models/MockQuestionModel.js'
 import PreviousyearQuestions from '../Models/Previousyearquestion.js'
+import PreviousQuestionPaper from '../Models/QuestionPaperModel.js'
 
 
 export const createPraticePlan = async (req, res) => {
@@ -558,8 +559,8 @@ export const createMissedQuestions = async (req, res) => {
       isActive: true
     }).lean();
 
-     console.log("randomSessions", randomSessions);
-     
+    console.log("randomSessions", randomSessions);
+
     for (const s of randomSessions) {
       pushIncorrect(s.Section1);
       pushIncorrect(s.Section2);
@@ -570,7 +571,7 @@ export const createMissedQuestions = async (req, res) => {
     for (const s of mockSessions) pushIncorrect(s.questions);
 
     console.log("mockSessions", mockSessions);
-    
+
 
     // FlaggedQuestion: no subject on session; collect all and filter later by question doc
     const flaggedSessions = await FlaggedQuestion.find({ userId }).lean();
@@ -602,7 +603,7 @@ export const createMissedQuestions = async (req, res) => {
     let eligible = new Set();
     if (ids.length > 0) {
       const eligibleDocs = await twelve
-        .find({ _id: { $in: ids }, subject, syllabus, Standard: String(standard)  })
+        .find({ _id: { $in: ids }, subject, syllabus, Standard: String(standard) })
         .select("_id")
         .lean();
       eligible = new Set(eligibleDocs.map((d) => String(d._id)));
@@ -661,70 +662,101 @@ export const createMissedQuestions = async (req, res) => {
 
 export const getMissedQuestions = async (req, res) => {
   try {
-    
-    const { userId , subject, syllabus, standard } = req.body;
+    const { userId, subject, syllabus, standard } = req.body;
 
     if (!subject) {
       return res.status(400).json({ message: "Subject is required" });
     }
 
-    // Find the session for this user and subject that is active
-    const session = await MissedQuestions.findOne({ userId, subject, syllabus, standard, isActive: true });
+    // 1️⃣ Find the active session
+    const session = await MissedQuestions.findOne({
+      userId,
+      subject,
+      syllabus,
+      standard,
+      isActive: true,
+    });
+
+    console.log("session", session);
 
     if (!session) {
-      return res.status(404).json({ message: "No missed questions session found for this subject" });
+      return res.status(404).json({
+        message: "No missed questions session found for this subject",
+      });
     }
 
-    const normalizeOptions = (options) =>
-      options.map((opt) => {
-        if (typeof opt === "string") return { text: opt };
-        if (opt && typeof opt === "object") {
-          if (opt.text && String(opt.text).trim() !== "") return { text: String(opt.text).trim() };
-          if (opt.diagramUrl && String(opt.diagramUrl).trim() !== "") return { diagramUrl: String(opt.diagramUrl).trim() };
-          // Fallback: concatenate any string-like values (handles shapes like {A:".."})
-          const stringValues = Object.entries(opt)
-            .filter(([key, value]) =>
-              !["_id", "id", "__v"].includes(key) && typeof value === "string" && value.trim() !== ""
-            )
-            .map(([, value]) => value.trim());
-          if (stringValues.length > 0) {
-            return { text: stringValues.join(" ") };
-          }
-          // Fallback: numeric-key join (e.g., {0:"a",1:"b"})
-          const joined = Object.keys(opt)
-            .filter((k) => !isNaN(k))
-            .sort((a, b) => a - b)
-            .map((k) => String(opt[k]).trim())
-            .filter((v) => v !== "")
-            .join(" ");
-          if (joined) return { text: joined };
+
+
+    // 2️⃣ Extract question IDs
+    const allIds = session.questions.map((q) => q.questionId);
+
+
+    // 3️⃣ Fetch from both collections
+    const [twelveQuestions, previousPapers] = await Promise.all([
+      twelve.find({ _id: { $in: allIds } }).select("_id question options correctAnswer"),
+      PreviousQuestionPaper.find({
+        "questions._id": { $in: allIds },
+      }).select("questions._id questions.question questions.options questions.correctAnswer"),
+    ]);
+
+    console.log("twelveQuestions =>", JSON.stringify(twelveQuestions, null, 2));
+    console.log("previousPapers =>", JSON.stringify(previousPapers, null, 2));
+
+
+    // 4️⃣ Flatten previous paper questions
+    const flattenedPrevious = previousPapers.flatMap((paper) =>
+      paper.questions.map((q) => ({
+        _id: q._id,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+      }))
+    );
+
+    // 5️⃣ Combine both sources
+    const allQuestions = [...twelveQuestions, ...flattenedPrevious];
+
+    // 6️⃣ Clean and normalize options
+    const normalizeOptions = (options = []) => {
+      return options.map((opt) => {
+        if (!opt) return { text: "" };
+
+        // Case 1: String type option (old data)
+        if (typeof opt === "string") {
+          return { text: opt.trim() };
         }
+
+        // Case 2: Object type (new schema)
+        if (typeof opt === "object") {
+          const hasText = opt.text && String(opt.text).trim() !== "";
+          const hasDiagram = opt.diagramUrl && String(opt.diagramUrl).trim() !== "";
+
+          if (hasText) return { text: String(opt.text).trim() };
+          if (hasDiagram) return { diagramUrl: String(opt.diagramUrl).trim() };
+        }
+
         return { text: "" };
       });
+    };
 
-    // Load full question docs for all missed question IDs
-    const allIds = session.questions.map((q) => q.questionId);
-    const fullQuestions = await twelve
-      .find({ _id: { $in: allIds } })
-      .select("_id question options correctAnswer");
+    // Helper to get question by ID
+    const getById = (id) => allQuestions.find((fq) => fq._id.toString() === String(id));
 
-    const getById = (id) => fullQuestions.find((fq) => fq._id.toString() === String(id));
+    // 7️⃣ Map missed questions
+    const mappedQuestions = session.questions.map((q) => {
+      const details = getById(q.questionId);
+      return {
+        index: q.index,
+        status: q.status,
+        answeredAt: q.answeredAt,
+        attempts: q.attempts,
+        question: details?.question || "",
+        options: normalizeOptions(details?.options || []),
+        correctAnswer: details?.correctAnswer || "",
+      };
+    });
 
-    const mapQuestions = (questionsArray) =>
-      questionsArray.map((q) => {
-        const details = getById(q.questionId);
-        return {
-          index: q.index,
-          status: q.status,
-          answeredAt: q.answeredAt,
-          attempts: q.attempts,
-          question: details?.question || "",
-          options: normalizeOptions(details?.options || []),
-          correctAnswer: details?.correctAnswer || "",
-        };
-      });
-
-    // Resolve currentQuestion
+    // 8️⃣ Current question
     let currentQuestion = null;
     if (session.currentQuestion?.questionId) {
       const cur = getById(session.currentQuestion.questionId);
@@ -738,19 +770,23 @@ export const getMissedQuestions = async (req, res) => {
         : null;
     }
 
-    res.status(200).json({
+    // 9️⃣ Send response
+    return res.status(200).json({
       message: "Missed questions retrieved",
       subject: session.subject,
-      questions: mapQuestions(session.questions),
+      questions: mappedQuestions,
       currentQuestion,
       progress: session.progress,
     });
-
   } catch (error) {
     console.error("Error fetching missed questions:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
+
 
 
 export const checkMissedAnswer = async (req, res) => {
