@@ -9,6 +9,7 @@ import QuestionPaperRoute from "./Route/QuestionPaperRoute.js"
 import PersonalizedMcqRoute from "./Route/PersonalizedMcqRoute.js"
 import PaymentRoute from "./Route/PaymentRoute.js"
 import TodaysQuestionRoute from "./Route/TodaysQuestionRoute.js"
+import SubjectRoute from "./Route/SubjectRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import ConnectDB from "./Database/db.js";
@@ -46,6 +47,7 @@ app.use('/api/questionpaper', QuestionPaperRoute);
 app.use('/api/personalizedmcq', PersonalizedMcqRoute);
 app.use('/api/payment', PaymentRoute)
 app.use('/api/todaysquestion', TodaysQuestionRoute);
+app.use('/api/subject', SubjectRoute)
 
 
 app.listen(PORT,  () => {
