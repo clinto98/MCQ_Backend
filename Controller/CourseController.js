@@ -55,47 +55,106 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
   }
 };
 
-
-
 // Enroll or update enrollment
 export const enrollCourses = async (req, res) => {
   try {
-    const { studentId, courseIds, preferredSubjects } = req.body;
+    const { studentId, courseId, subjects } = req.body;
 
-    // Find existing enrollment or create new
-    let enrollment = await Enrollment.findOne({ studentId });
-
-    if (!enrollment) {
-      enrollment = new Enrollment({
-        studentId,
-        enrolledCourses: courseIds.map(id => ({ courseId: id })),
-        preferredSubjects
+    // Validate request
+    if (!studentId || !courseId || !Array.isArray(subjects) || subjects.length === 0) {
+      return res.status(400).json({
+        message: "studentId, courseId, and subjects (non-empty array) are required",
       });
-    } else {
-      // Add new courses avoiding duplicates
-      const existingCourseIds = enrollment.enrolledCourses.map(c => c.courseId.toString());
-      const newCourses = courseIds
-        .filter(id => !existingCourseIds.includes(id))
-        .map(id => ({ courseId: id }));
-
-      enrollment.enrolledCourses.push(...newCourses);
-
-      // Update preferred subjects (merge and remove duplicates)
-      enrollment.preferredSubjects = Array.from(new Set([...enrollment.preferredSubjects, ...preferredSubjects]));
     }
 
+    // Find existing enrollment
+    let enrollment = await Enrollment.findOne({ studentId });
+    if (!enrollment) {
+      // Create new enrollment
+      enrollment = new Enrollment({
+        studentId,
+        enrolledCourses: [
+          {
+            courseId,
+            selectedSubjects: [...new Set(subjects)],
+          },
+        ],
+      });
+    } else {
+      // Find if the course already exists in enrolledCourses
+      const existingCourse = enrollment.enrolledCourses.find(
+        (c) => c.courseId.toString() === courseId
+      );
+
+      if (existingCourse) {
+        // Merge subjects, remove duplicates
+        existingCourse.selectedSubjects = Array.from(
+          new Set([...existingCourse.selectedSubjects, ...subjects])
+        );
+      } else {
+        // Add as new course enrollment
+        enrollment.enrolledCourses.push({
+          courseId,
+          selectedSubjects: [...new Set(subjects)],
+        });
+      }
+    }
+
+    // Save updated enrollment
     await enrollment.save();
 
     res.status(200).json({
       message: "Enrollment updated successfully",
-      enrollment
+      enrollment,
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+export const getEnrolledCoursesByStudentId = async (req, res) => {
+  try {
+    const { studentId } = req.body; // or use req.query.studentId if you prefer query param
+
+    if (!studentId) {
+      return res.status(400).json({ message: "studentId is required" });
+    }
+
+    // Find enrollment and populate course details
+    const enrollment = await Enrollment.findOne({ studentId })
+      .populate("enrolledCourses.courseId", "title description") // populate course details
+      .lean();
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "No enrollment found for this student" });
+    }
+
+    // Transform response (optional for clarity)
+    const enrolledCourses = enrollment.enrolledCourses.map((course) => ({
+      courseId: course.courseId?._id || course.courseId,
+      courseName: course.courseId?.title || "N/A",
+      description: course.courseId?.description || "",
+      selectedSubjects: course.selectedSubjects,
+      enrollmentDate: course.enrollmentDate,
+    }));
+
+    res.status(200).json({
+      message: "Enrolled courses fetched successfully",
+      studentId,
+      totalCourses: enrolledCourses.length,
+      enrolledCourses,
+    });
+  } catch (error) {
+    console.error("Error fetching enrolled courses:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
 
 // Get enrollment details
 export const getEnrollment = async (req, res) => {

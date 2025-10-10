@@ -1,9 +1,6 @@
 import express from "express";
 import { checkFlaggedAnswerById, checkMockAnswerById, checkTimeAnswerById, createBulkTwelfthQuestions, createTimeQuiz, createTwelfthQuestion, flagQuestion, getAllFlaggedQuestions, getMockQuestions, getTimedQuiz, MockBattle, submitTimeAnswer, unflagQuestion } from "../Controller/McqController.js";
 
-
-
-
 const router = express.Router();
 
 router.post('/CreateMcq', createTwelfthQuestion)

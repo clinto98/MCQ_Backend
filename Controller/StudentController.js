@@ -7,8 +7,6 @@ import { OAuth2Client } from 'google-auth-library';
 import { sendOtpEmail } from "../helper/mailer.js";
 
 
-
-
 dotenv.config();
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -63,7 +61,6 @@ const generateToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECERT_KEY, {
     expiresIn: '15d',
   })
-
 }
 
 export const updateStudentProfile = async (req, res) => {
@@ -92,8 +89,7 @@ export const updateStudentProfile = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: "No valid fields provided for update" });
     }
-
-    // ✅ Run single DB update
+    
     const updatedStudent = await Student.findByIdAndUpdate(
       studentId,
       { $set: updates },
@@ -122,8 +118,6 @@ export const updateStudentProfile = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
 
 export const getStudentProfile = async (req, res) => {
   try {
@@ -159,7 +153,6 @@ export const getStudentProfile = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const emailRegister = async (req, res) => {
   try {
@@ -280,7 +273,6 @@ export const studentSignup = async (req, res) => {
     });
 
     await newStudent.save(); // ✅ ensures _id is created
-
     // ✅ Generate token AFTER saving
     const token = generateToken(newStudent);
     

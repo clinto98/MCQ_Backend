@@ -330,7 +330,7 @@ export const getRandomQuestion = async (req, res) => {
   try {
     const { userId, subject, syllabus, standard } = req.body;
 
-    console.log("Request body:", req.body);
+
 
     console.log("userId:", userId, "subject:", subject, "syllabus", syllabus, "standard", standard);
 
@@ -520,7 +520,6 @@ export const getRandomQuestion = async (req, res) => {
 };
 
 
-
 export const createMissedQuestions = async (req, res) => {
   try {
     if (!req.body) {
@@ -558,8 +557,6 @@ export const createMissedQuestions = async (req, res) => {
       standard,
       isActive: true
     }).lean();
-
-    console.log("randomSessions", randomSessions);
 
     for (const s of randomSessions) {
       pushIncorrect(s.Section1);
@@ -662,137 +659,107 @@ export const createMissedQuestions = async (req, res) => {
 
 export const getMissedQuestions = async (req, res) => {
   try {
-    const { userId, subject, syllabus, standard } = req.body;
+    const { userId, subject , standard , syllabus } = req.body;
 
-    if (!subject) {
-      return res.status(400).json({ message: "Subject is required" });
+    const missedData = await MissedQuestions.findOne({ userId, subject , syllabus , standard  });
+
+    if (!missedData) {
+      return res.status(404).json({ message: "No missed questions found" });
     }
 
-    // 1️⃣ Find the active session
-    const session = await MissedQuestions.findOne({
-      userId,
-      subject,
-      syllabus,
-      standard,
-      isActive: true,
-    });
+    // 1️⃣ Extract all question IDs
+    const allIds = missedData.questions.map((q) => q.questionId);
 
-    console.log("session", session);
-
-    if (!session) {
-      return res.status(404).json({
-        message: "No missed questions session found for this subject",
-      });
-    }
-
-
-
-    // 2️⃣ Extract question IDs
-    const allIds = session.questions.map((q) => q.questionId);
-
-
-    // 3️⃣ Fetch from both collections
+    // 2️⃣ Fetch data from both collections
     const [twelveQuestions, previousPapers] = await Promise.all([
-      twelve.find({ _id: { $in: allIds } }).select("_id question options correctAnswer"),
+      twelve
+        .find({ _id: { $in: allIds } })
+        .select("_id question options correctAnswer"),
       PreviousQuestionPaper.find({
         "questions._id": { $in: allIds },
       }).select("questions._id questions.question questions.options questions.correctAnswer"),
     ]);
 
-    console.log("twelveQuestions =>", JSON.stringify(twelveQuestions, null, 2));
-    console.log("previousPapers =>", JSON.stringify(previousPapers, null, 2));
+    // 3️⃣ Build a unified map (questionId => data)
+    const questionMap = {};
 
-
-    // 4️⃣ Flatten previous paper questions
-    const flattenedPrevious = previousPapers.flatMap((paper) =>
-      paper.questions.map((q) => ({
-        _id: q._id,
+    // Add questions from `twelve`
+    twelveQuestions.forEach((q) => {
+      questionMap[q._id.toString()] = {
         question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
-      }))
-    );
-
-    // 5️⃣ Combine both sources
-    const allQuestions = [...twelveQuestions, ...flattenedPrevious];
-
-    // 6️⃣ Clean and normalize options
-    const normalizeOptions = (options = []) => {
-      return options.map((opt) => {
-        if (!opt) return { text: "" };
-
-        // Case 1: String type option (old data)
-        if (typeof opt === "string") {
-          return { text: opt.trim() };
-        }
-
-        // Case 2: Object type (new schema)
-        if (typeof opt === "object") {
-          const hasText = opt.text && String(opt.text).trim() !== "";
-          const hasDiagram = opt.diagramUrl && String(opt.diagramUrl).trim() !== "";
-
-          if (hasText) return { text: String(opt.text).trim() };
-          if (hasDiagram) return { diagramUrl: String(opt.diagramUrl).trim() };
-        }
-
-        return { text: "" };
-      });
-    };
-
-    // Helper to get question by ID
-    const getById = (id) => allQuestions.find((fq) => fq._id.toString() === String(id));
-
-    // 7️⃣ Map missed questions
-    const mappedQuestions = session.questions.map((q) => {
-      const details = getById(q.questionId);
-      return {
-        index: q.index,
-        status: q.status,
-        answeredAt: q.answeredAt,
-        attempts: q.attempts,
-        question: details?.question || "",
-        options: normalizeOptions(details?.options || []),
-        correctAnswer: details?.correctAnswer || "",
       };
     });
 
-    // 8️⃣ Current question
-    let currentQuestion = null;
-    if (session.currentQuestion?.questionId) {
-      const cur = getById(session.currentQuestion.questionId);
-      currentQuestion = cur
-        ? {
-          index: session.currentQuestion.index,
-          question: cur.question,
-          options: normalizeOptions(cur.options || []),
-          correctAnswer: cur.correctAnswer,
+    // Add questions from previous papers
+    previousPapers.forEach((paper) => {
+      paper.questions.forEach((q) => {
+        if (allIds.includes(q._id.toString())) {
+          questionMap[q._id.toString()] = {
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+          };
         }
-        : null;
+      });
+    });
+
+    // 4️⃣ Populate allQuestions array with index number
+    const allQuestions = missedData.questions.map((q, index) => ({
+      number: index + 1, // 👈 Add question number
+      _id: q.questionId,
+      ...questionMap[q.questionId.toString()],
+      status: q.status,
+      answeredAt: q.answeredAt,
+      attempts: q.attempts,
+    }));
+
+    // 5️⃣ Populate currentQuestion with full data + number
+    let currentQuestionData = null;
+    if (missedData.currentQuestion?.questionId) {
+      const cq = missedData.currentQuestion;
+      const full = questionMap[cq.questionId.toString()];
+      const index = missedData.questions.findIndex(
+        (q) => q.questionId.toString() === cq.questionId.toString()
+      );
+
+      if (full) {
+        currentQuestionData = {
+          number: index + 1, // 👈 Include question number here too
+          ...cq.toObject(),
+          question: full.question,
+          options: full.options,
+          correctAnswer: full.correctAnswer,
+        };
+      }
     }
 
-    // 9️⃣ Send response
-    return res.status(200).json({
-      message: "Missed questions retrieved",
-      subject: session.subject,
-      questions: mappedQuestions,
-      currentQuestion,
-      progress: session.progress,
+    // 6️⃣ Send response
+    res.status(200).json({
+      message: "Missed questions retrieved successfully",
+      sessionId: missedData._id,
+      subject: missedData.subject,
+      syllabus: missedData.syllabus,
+      standard: missedData.standard,
+      allQuestions,
+      currentQuestion: currentQuestionData,
+      progress: missedData.progress,
     });
   } catch (error) {
     console.error("Error fetching missed questions:", error);
-    return res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
+    res
+      .status(500)
+      .json({ message: "Error fetching missed questions", error: error.message });
   }
 };
 
 
-
 export const checkMissedAnswer = async (req, res) => {
   try {
-    const questionId = req.params.id;
-    const { userAnswer, userId } = req.body;
+
+    const { questionId, userAnswer, userId } = req.body;
+
 
     if (!questionId || !userAnswer || !userId) {
       return res.status(400).json({
@@ -826,7 +793,7 @@ export const checkMissedAnswer = async (req, res) => {
         message: "Question not found in missed questions session",
       });
     }
-
+    
     session.questions[index].attempts += 1;
     session.questions[index].answeredAt = new Date();
     session.questions[index].status = isCorrect ? "correct" : "incorrect";
@@ -858,9 +825,7 @@ export const checkMissedAnswer = async (req, res) => {
         };
       }
     }
-
     await session.save();
-
     res.status(200).json({
       message: "Answer checked and session updated",
       questionId: question._id,
@@ -883,7 +848,6 @@ export const createRandomQuestions = async (req, res) => {
     if (!userId || !subject) {
       return res.status(400).json({ message: "User ID and subject are required" });
     }
-
     // ✅ Check if there's an active session for the same subject
     const existingActiveSession = await RandomQuestions.findOne({
       userId,
@@ -927,18 +891,15 @@ export const createRandomQuestions = async (req, res) => {
         message: `Not enough questions found. Required ${totalNeeded}, found ${randomQuestions.length}`,
       });
     }
-
     // Divide into 3 sections
     const section1 = randomQuestions.slice(0, questionCount).map((q, i) => ({
       questionId: q._id,
       number: i + 1,
     }));
-
     const section2 = randomQuestions.slice(questionCount, questionCount * 2).map((q, i) => ({
       questionId: q._id,
       number: i + 1,
     }));
-
     const section3 = randomQuestions.slice(questionCount * 2).map((q, i) => ({
       questionId: q._id,
       number: i + 1,
@@ -961,7 +922,6 @@ export const createRandomQuestions = async (req, res) => {
       isActive: true,
       progress: { status: "in_progress" },
     });
-
     await newSession.save();
 
     return res.status(200).json({
@@ -973,7 +933,6 @@ export const createRandomQuestions = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const GetRandomQuestions = async (req, res) => {
   try {
