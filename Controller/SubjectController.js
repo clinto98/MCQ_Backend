@@ -64,7 +64,7 @@ export const getSubjectsByCourseId = async (req, res) => {
     const allSubjects = subjectDocs.flatMap((doc) => doc.Subjects);
 
     // Filter unique subjects only
-    const uniqueSubjects = [...new Set(allSubjects.map((s) => s.trim()))];
+    const SubjectDoc = [...new Set(allSubjects.map((s) => s.trim()))];
 
     res.status(200).json({
       message: "Subjects fetched successfully",
@@ -73,7 +73,7 @@ export const getSubjectsByCourseId = async (req, res) => {
         title: doc.courseId.title,
         description: doc.courseId.description,
       })),
-      uniqueSubjects,
+      data: SubjectDoc,
     });
   } catch (error) {
     console.error("Error fetching subjects:", error);
