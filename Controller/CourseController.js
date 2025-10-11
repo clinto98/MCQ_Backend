@@ -58,52 +58,47 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
 export const enrollCourses = async (req, res) => {
   try {
     const { studentId, courseId, subjects } = req.body;
-    // Validate request
-    if (!studentId || !courseId || !Array.isArray(subjects) || subjects.length === 0) {
+
+    // courseId can be an array
+    if (!studentId || !Array.isArray(courseId) || courseId.length === 0 || !Array.isArray(subjects) || subjects.length === 0) {
       return res.status(400).json({
-        message: "studentId, courseId, and subjects (non-empty array) are required",
+        message: "studentId, courseId (array), and subjects (array) are required",
       });
     }
-    // Find existing enrollment for the student
+
     let enrollment = await Enrollment.findOne({ studentId });
+
     if (!enrollment) {
-      // If no enrollment, create new one
       enrollment = new Enrollment({
         studentId,
-        enrolledCourses: [
-          {
-            courseId,
-            selectedSubjects: [...new Set(subjects)],
-          },
-        ],
+        enrolledCourses: [],
       });
-    } else {
-      // Find if the course already exists
+    }
+
+    // Loop through each course and add/update subjects
+    for (const id of courseId) {
       const existingCourseIndex = enrollment.enrolledCourses.findIndex(
-        (c) => c.courseId.toString() === courseId
+        (c) => c.courseId.toString() === id
       );
 
       if (existingCourseIndex !== -1) {
-        // Course already exists → merge subjects and prevent duplicates
+        // Course exists → merge subjects
         const existingSubjects = enrollment.enrolledCourses[existingCourseIndex].selectedSubjects;
-
         const mergedSubjects = Array.from(new Set([...existingSubjects, ...subjects]));
-        // Only update if new subjects are added (prevent duplicate saving)
-        if (mergedSubjects.length !== existingSubjects.length) {
-          enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
-        }
+        enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
       } else {
-        // Add new course enrollment only if it's not already there
+        // New course → add as a separate entry
         enrollment.enrolledCourses.push({
-          courseId,
+          courseId: id,
           selectedSubjects: [...new Set(subjects)],
         });
       }
     }
-    // Save the document
+
     await enrollment.save();
+
     res.status(200).json({
-      message: "Enrollment updated successfully",
+      message: "Courses enrolled successfully",
       enrollment,
     });
   } catch (error) {

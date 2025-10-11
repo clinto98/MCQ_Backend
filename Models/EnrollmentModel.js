@@ -1,30 +1,31 @@
 import mongoose from "mongoose";
 
-const enrollmentSchema = new mongoose.Schema({
-  studentId: {
+const enrolledCourseSchema = new mongoose.Schema({
+  courseId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Student",
+    ref: "Course",
     required: true,
   },
-  enrolledCourses: [
-    {
-      courseId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Course",
-        required: true,
-      },
-      selectedSubjects: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
-      enrollmentDate: {
-        type: Date,
-        default: Date.now,
-      },
+  selectedSubjects: {
+    type: [String],
+    default: [],
+  },
+  enrollmentDate: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+const enrollmentSchema = new mongoose.Schema(
+  {
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Student",
+      required: true,
     },
-  ],
-}, { timestamps: true });
+    enrolledCourses: [enrolledCourseSchema],
+  },
+  { timestamps: true }
+);
 
 export default mongoose.model("Enrollment", enrollmentSchema);
