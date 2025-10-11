@@ -121,6 +121,7 @@ export const enrollCourses = async (req, res) => {
 
 
 
+
 export const getEnrolledCoursesByStudentId = async (req, res) => {
   try {
     const { studentId } = req.body; // or use req.query.studentId if you prefer query param
