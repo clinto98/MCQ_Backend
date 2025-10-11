@@ -54,22 +54,18 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
     });
   }
 };
-
 // Enroll or update enrollment
 export const enrollCourses = async (req, res) => {
   try {
     const { studentId, courseId, subjects } = req.body;
-
     // Validate request
     if (!studentId || !courseId || !Array.isArray(subjects) || subjects.length === 0) {
       return res.status(400).json({
         message: "studentId, courseId, and subjects (non-empty array) are required",
       });
     }
-
     // Find existing enrollment for the student
     let enrollment = await Enrollment.findOne({ studentId });
-
     if (!enrollment) {
       // If no enrollment, create new one
       enrollment = new Enrollment({
@@ -92,7 +88,6 @@ export const enrollCourses = async (req, res) => {
         const existingSubjects = enrollment.enrolledCourses[existingCourseIndex].selectedSubjects;
 
         const mergedSubjects = Array.from(new Set([...existingSubjects, ...subjects]));
-
         // Only update if new subjects are added (prevent duplicate saving)
         if (mergedSubjects.length !== existingSubjects.length) {
           enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
@@ -105,10 +100,8 @@ export const enrollCourses = async (req, res) => {
         });
       }
     }
-
     // Save the document
     await enrollment.save();
-
     res.status(200).json({
       message: "Enrollment updated successfully",
       enrollment,
@@ -118,9 +111,6 @@ export const enrollCourses = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
-
 
 export const getEnrolledCoursesByStudentId = async (req, res) => {
   try {
