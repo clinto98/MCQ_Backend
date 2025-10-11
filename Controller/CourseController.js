@@ -67,10 +67,11 @@ export const enrollCourses = async (req, res) => {
       });
     }
 
-    // Find existing enrollment
+    // Find existing enrollment for the student
     let enrollment = await Enrollment.findOne({ studentId });
+
     if (!enrollment) {
-      // Create new enrollment
+      // If no enrollment, create new one
       enrollment = new Enrollment({
         studentId,
         enrolledCourses: [
@@ -81,18 +82,23 @@ export const enrollCourses = async (req, res) => {
         ],
       });
     } else {
-      // Find if the course already exists in enrolledCourses
-      const existingCourse = enrollment.enrolledCourses.find(
+      // Find if the course already exists
+      const existingCourseIndex = enrollment.enrolledCourses.findIndex(
         (c) => c.courseId.toString() === courseId
       );
 
-      if (existingCourse) {
-        // Merge subjects, remove duplicates
-        existingCourse.selectedSubjects = Array.from(
-          new Set([...existingCourse.selectedSubjects, ...subjects])
-        );
+      if (existingCourseIndex !== -1) {
+        // Course already exists → merge subjects and prevent duplicates
+        const existingSubjects = enrollment.enrolledCourses[existingCourseIndex].selectedSubjects;
+
+        const mergedSubjects = Array.from(new Set([...existingSubjects, ...subjects]));
+
+        // Only update if new subjects are added (prevent duplicate saving)
+        if (mergedSubjects.length !== existingSubjects.length) {
+          enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
+        }
       } else {
-        // Add as new course enrollment
+        // Add new course enrollment only if it's not already there
         enrollment.enrolledCourses.push({
           courseId,
           selectedSubjects: [...new Set(subjects)],
@@ -100,7 +106,7 @@ export const enrollCourses = async (req, res) => {
       }
     }
 
-    // Save updated enrollment
+    // Save the document
     await enrollment.save();
 
     res.status(200).json({
@@ -108,10 +114,11 @@ export const enrollCourses = async (req, res) => {
       enrollment,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error during enrollment:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 
 export const getEnrolledCoursesByStudentId = async (req, res) => {
