@@ -73,7 +73,7 @@ export const getSubjectsByCourseId = async (req, res) => {
         title: doc.courseId.title,
         description: doc.courseId.description,
       })),
-      data: SubjectDoc,
+      Subjects: SubjectDoc,
     });
   } catch (error) {
     console.error("Error fetching subjects:", error);
