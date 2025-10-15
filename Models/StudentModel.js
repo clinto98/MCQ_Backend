@@ -93,7 +93,13 @@ const studentSchema = new mongoose.Schema(
     onBoarding: {
       type: String,
       default: "Not Started",
-    }
+    },
+    currentPlan: {
+      type: String,
+      enum: ["Basic", "1 Month", "3 Months", "1 Year"],
+      default: "Basic",
+    },
+    planExpiryDate: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 const practicePlanSchema = new mongoose.Schema(
   {
     userId: {

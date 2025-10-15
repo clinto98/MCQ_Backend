@@ -29,7 +29,7 @@ export const createOrUpdateSubjects = async (req, res) => {
     }
 
     res.status(200).json({
-      message: "Subjects added/updated successfully",
+      message: "Subjects added updated successfully",
       data: subjectDoc,
     });
   } catch (error) {
@@ -39,18 +39,14 @@ export const createOrUpdateSubjects = async (req, res) => {
 };
 
 
-
 export const getSubjectsByCourseId = async (req, res) => {
   try {
     const { courseId } = req.body;
-
     if (!courseId || (Array.isArray(courseId) && courseId.length === 0)) {
       return res.status(400).json({ message: "courseId (single or array) is required" });
     }
-
     // Convert to array if single id passed
     const courseIds = Array.isArray(courseId) ? courseId : [courseId];
-
     // Fetch all subjects matching any of the given courseIds
     const subjectDocs = await Subject.find({ courseId: { $in: courseIds } })
       .populate("courseId", "title description")
@@ -59,13 +55,11 @@ export const getSubjectsByCourseId = async (req, res) => {
     if (!subjectDocs || subjectDocs.length === 0) {
       return res.status(404).json({ message: "No subjects found for given course(s)" });
     }
-
     // Combine all subject names from each course
     const allSubjects = subjectDocs.flatMap((doc) => doc.Subjects);
 
     // Filter unique subjects only
     const SubjectDoc = [...new Set(allSubjects.map((s) => s.trim()))];
-
     res.status(200).json({
       message: "Subjects fetched successfully",
       courses: subjectDocs.map((doc) => ({

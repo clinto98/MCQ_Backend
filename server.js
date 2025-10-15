@@ -13,6 +13,8 @@ import SubjectRoute from "./Route/SubjectRoute.js"
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import ConnectDB from "./Database/db.js";
+import SubscriptionRoute from "./Route/SubscriptionRoute.js"
+import { startSubscriptionExpiryJob } from "./Jobs/subscriptionExpiryJob.js";
 
 await ConnectDB();
 
@@ -31,9 +33,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-
-
-
 app.get('/', (req, res) => {
     res.send('Hello World!');
 })
@@ -48,9 +47,11 @@ app.use('/api/personalizedmcq', PersonalizedMcqRoute);
 app.use('/api/payment', PaymentRoute)
 app.use('/api/todaysquestion', TodaysQuestionRoute);
 app.use('/api/subject', SubjectRoute)
+app.use('/api/subscription', SubscriptionRoute)
 
+startSubscriptionExpiryJob()
 
-app.listen(PORT,  () => {
+app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 

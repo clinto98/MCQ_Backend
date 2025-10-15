@@ -4,7 +4,7 @@ import Enrollment from "../Models/EnrollmentModel.js";
 
 export const createCourse = async (req, res) => {
   try {
-    const { title, description, category, standerd, syllabus, startDate, endDate } = req.body;
+    const { title, description, category, standerd, courseImage, syllabus, startDate, endDate } = req.body;
 
     if (!title || !syllabus) {
       return res.status(400).json({ message: "Title, syllabus are required" });
@@ -18,12 +18,59 @@ export const createCourse = async (req, res) => {
       standerd,
       startDate,
       endDate,
+      courseImage,
     });
 
     await newCourse.save();
     res.status(201).json({ message: "Course created successfully", course: newCourse });
   } catch (error) {
     res.status(500).json({ message: "Error creating course", error: error.message });
+  }
+};
+
+export const updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params; // Course ID should come from URL params
+    const updates = req.body;
+
+    // ✅ Ensure courseId is provided
+    if (!courseId) {
+      return res.status(400).json({ message: "Course ID is required" });
+    }
+
+    // ✅ Check if course exists
+    const existingCourse = await Course.findById(courseId);
+    if (!existingCourse) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // ✅ Only update provided fields
+    const allowedFields = [
+      "title",
+      "description",
+      "category",
+      "standerd",
+      "courseImage",
+      "syllabus",
+      "startDate",
+      "endDate",
+    ];
+
+    for (const key of allowedFields) {
+      if (updates[key] !== undefined) {
+        existingCourse[key] = updates[key];
+      }
+    }
+
+    await existingCourse.save();
+
+    res.status(200).json({
+      message: "Course updated successfully",
+      course: existingCourse,
+    });
+  } catch (error) {
+    console.error("Error updating course:", error);
+    res.status(500).json({ message: "Error updating course", error: error.message });
   }
 };
 
@@ -55,55 +102,87 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
   }
 };
 // Enroll or update enrollment
-export const enrollCourses = async (req, res) => {
+export const enrollCourse = async (req, res) => {
   try {
-    const { studentId, courseId, subjects } = req.body;
+    const { studentId, courseId, selectedSubjects } = req.body;
 
-    // courseId can be an array
-    if (!studentId || !Array.isArray(courseId) || courseId.length === 0 || !Array.isArray(subjects) || subjects.length === 0) {
-      return res.status(400).json({
-        message: "studentId, courseId (array), and subjects (array) are required",
-      });
+    if (!studentId || !courseId || !selectedSubjects?.length) {
+      return res.status(400).json({ message: "All fields are required" });
     }
 
+    const courseIdStr = String(courseId);
+
+    // ✅ Check if course exists
+    const course = await Course.findById(courseIdStr);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // ✅ Find enrollment for this student
     let enrollment = await Enrollment.findOne({ studentId });
 
+    // 🆕 No enrollment yet → create new
     if (!enrollment) {
-      enrollment = new Enrollment({
+      enrollment = await Enrollment.create({
         studentId,
-        enrolledCourses: [],
+        enrolledCourses: [
+          {
+            courseId: courseIdStr,
+            selectedSubjects,
+            enrollmentDate: new Date(),
+          },
+        ],
+      });
+
+      return res.status(200).json({
+        message: "Enrollment successful (new student record created)",
+        enrollment,
       });
     }
 
-    // Loop through each course and add/update subjects
-    for (const id of courseId) {
-      const existingCourseIndex = enrollment.enrolledCourses.findIndex(
-        (c) => c.courseId.toString() === id
+    // ✅ Find if this courseId already exists in enrolledCourses
+    const existingCourse = enrollment.enrolledCourses.find(
+      (c) => c.courseId.toString() === courseIdStr
+    );
+
+    if (existingCourse) {
+      // 🧩 Add only *new* subjects that are not already there
+      const newSubjects = selectedSubjects.filter(
+        (subj) => !existingCourse.selectedSubjects.includes(subj)
       );
 
-      if (existingCourseIndex !== -1) {
-        // Course exists → merge subjects
-        const existingSubjects = enrollment.enrolledCourses[existingCourseIndex].selectedSubjects;
-        const mergedSubjects = Array.from(new Set([...existingSubjects, ...subjects]));
-        enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
-      } else {
-        // New course → add as a separate entry
-        enrollment.enrolledCourses.push({
-          courseId: id,
-          selectedSubjects: [...new Set(subjects)],
+      if (newSubjects.length === 0) {
+        return res.status(400).json({
+          message: "No new subjects to add — already enrolled in these subjects",
         });
       }
+
+      existingCourse.selectedSubjects.push(...newSubjects);
+      existingCourse.selectedSubjects = [...new Set(existingCourse.selectedSubjects)];
+      await enrollment.save();
+
+      return res.status(200).json({
+        message: `Updated existing course with new subjects: ${newSubjects.join(", ")}`,
+        enrollment,
+      });
     }
+
+    // 🆕 If course not found → create new course entry
+    enrollment.enrolledCourses.push({
+      courseId: courseIdStr,
+      selectedSubjects,
+      enrollmentDate: new Date(),
+    });
 
     await enrollment.save();
 
-    res.status(200).json({
-      message: "Courses enrolled successfully",
+    return res.status(200).json({
+      message: "Enrollment successful (new course added)",
       enrollment,
     });
   } catch (error) {
-    console.error("Error during enrollment:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Enrollment error:", error);
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 

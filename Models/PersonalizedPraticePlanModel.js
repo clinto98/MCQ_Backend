@@ -35,7 +35,7 @@ const personalizedPracticePlanSchema = new mongoose.Schema(
     Section1: [questionStatusSchema],
     Section2: [questionStatusSchema],
     Section3: [questionStatusSchema],
-
+    
     // Track current question
     currentQuestion: {
       section: { type: Number, enum: [1, 2, 3], default: 1 },

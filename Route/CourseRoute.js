@@ -1,13 +1,14 @@
 import express from "express";
-import { createCourse, enrollCourses, getAllCoursesforHighersecondary, getEnrolledCoursesByStudentId, getEnrollment } from "../Controller/CourseController.js";
+import { createCourse, enrollCourse, getAllCoursesforHighersecondary, getEnrolledCoursesByStudentId, getEnrollment, updateCourse } from "../Controller/CourseController.js";
 
 
 const router = express.Router();
 
-router.post('/CreateCourse',createCourse);
-router.get('/GetAllCourses',getAllCoursesforHighersecondary);
-router.post('/CourseEnrollment',enrollCourses)
-router.post('/GetEnrolledCourses',getEnrollment)
-router.post('/GetAllEnrolledSubjects',getEnrolledCoursesByStudentId)
+router.post('/CreateCourse', createCourse);
+router.get('/GetAllCourses', getAllCoursesforHighersecondary);
+router.post('/CourseUpdate/:id', updateCourse)
+router.post('/CourseEnrollment', enrollCourse)
+router.post('/GetEnrolledCourses', getEnrollment)
+router.post('/GetAllEnrolledSubjects', getEnrolledCoursesByStudentId)
 
 export default router;

@@ -36,10 +36,8 @@ const todaysquestionsSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-
     // Sections
     Section1: [questionStatusSchema],
-
     // Track the current question user is on
     currentQuestion: {
       section: { type: Number, enum: [1], default: 1 },
@@ -50,7 +48,6 @@ const todaysquestionsSchema = new mongoose.Schema(
         default: null,
       },
     },
-
     // Progress summary
     progress: {
       completedQuestions: { type: Number, default: 0 },
