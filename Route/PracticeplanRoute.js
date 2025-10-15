@@ -13,6 +13,6 @@ router.post('/CreateRandomQuestions', createRandomQuestions)
 router.post('/GetRandomQuestions', getRandomQuestion)
 router.post('/CreateMissedQuestions', createMissedQuestions)
 router.post('/GetMissedQuestions', getMissedQuestions)
-router.post('/checkMissedAnswerById/:questionId', checkMissedAnswer)
+router.post('/checkMissedAnswerById', checkMissedAnswer)
 
 export default router;
