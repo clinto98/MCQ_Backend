@@ -7,7 +7,7 @@ const courseSchema = new mongoose.Schema(
         description: { type: String, trim: true },
         standerd: { type: String, trim: true },
         category: { type: String, trim: true },
-        syllabus: { type: String, enum: ["CBSE", "ICSE", "State Board", "SAT", "Other"], required: true },
+        syllabus: { type: String, enum: ["CBSE", "ICSE", "ICSC",  "State Board", "SAT", "Other"], required: true },
         // createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
         startDate: Date,
         endDate: Date,

@@ -1,5 +1,6 @@
 import express from "express";
 import { emailRegister, getStudentProfile, studentLogin, studentLogout, studentRegisterGoogle, studentSignup, updatePraticeMode, updateStudentProfile, updateStudentStandard, updateUserPreferences, verifyOtp } from "../Controller/StudentController.js";
+import { protectRoute } from "../Middileware/VerifyToken.js";
 
 
 const router = express.Router();
@@ -7,7 +8,7 @@ const router = express.Router();
 router.post('/StudentRegister', studentSignup)
 router.post('/StudentLogin', studentLogin)
 router.post('/StudentLogout', studentLogout)
-router.post('/emailValidate', emailRegister)
+router.post('/emailValidate', protectRoute, emailRegister)
 router.put('/standardupdate/:studentId', updateStudentStandard)
 router.put('/StudentPraticeMode', updatePraticeMode)
 router.post('/googleLogin', studentRegisterGoogle)

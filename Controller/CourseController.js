@@ -30,8 +30,12 @@ export const createCourse = async (req, res) => {
 
 export const updateCourse = async (req, res) => {
   try {
-    const { courseId } = req.params; // Course ID should come from URL params
+    const  courseId  = req.params.id;
+    console.log("course",courseId);
+     // Course ID should come from URL params
     const updates = req.body;
+    console.log("updates",updates);
+    
 
     // ✅ Ensure courseId is provided
     if (!courseId) {
