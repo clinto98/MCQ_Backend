@@ -144,6 +144,9 @@ export const verifySubscriptionPayment = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Subscription activated and course enrolled successfully",
+      plan: plan.name,
+      planAmount: plan.amount,
+      startDate: new Date(),
       expiryDate: endDate,
     });
   } catch (err) {

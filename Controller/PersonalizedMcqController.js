@@ -418,6 +418,10 @@ const fetchAttemptedQuestions = async ({ userId, subject, attemptedFilter, count
   }
 };
 
+
+
+
+
 /**
  * Fetch random questions
  */
@@ -472,10 +476,6 @@ const createPersonalizedSession = async ({
 }) => {
   try {
     // Deactivate any existing sessions for this user
-    await PersonalizedPracticePlan.updateMany(
-      { userId, isActive: true },
-      { isActive: false }
-    );
 
     // Create new personalized session
     const session = new PersonalizedPracticePlan({
@@ -757,6 +757,62 @@ export const checkPersonalizedAnswerById = async (req, res) => {
   }
 };
 
+
+
+export const getActivePersonalizedPlans = async (req, res) => {
+  try {
+    const { userId, syllabus, standard, subject } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        message: "userId is required",
+      });
+    }
+
+    // Build flexible filter
+    const filter = { userId, isActive: true };
+    if (syllabus) filter.syllabus = syllabus;
+    if (standard) filter.standard = standard;
+    if (subject) filter.subject = subject;
+
+    // ✅ Find all active plans
+    const plans = await PersonalizedPracticePlan.find(filter)
+      .select(
+        "subject syllabus standard userId isActive progress currentQuestion personalizedConfig"
+      )
+      .lean();
+
+    if (!plans || plans.length === 0) {
+      return res.status(404).json({ message: "No active personalized plans found" });
+    }
+
+    // ✅ Format output
+    const formattedPlans = plans.map((plan) => ({
+      sessionId: plan._id,
+      userId: plan.userId,
+      subject: plan.subject,
+      syllabus: plan.syllabus,
+      standard: plan.standard,
+      currentQuestion: plan.currentQuestion,
+      progress: plan.progress,
+      personalizedConfig: plan.personalizedConfig,
+      isActive: plan.isActive,
+      createdAt: plan.createdAt,
+    }));
+
+    return res.status(200).json({
+      message: "Active personalized plans fetched successfully",
+      totalPlans: formattedPlans.length,
+      plans: formattedPlans,
+    });
+  } catch (error) {
+    console.error("Error fetching active personalized plans:", error);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
 
 
 /**
