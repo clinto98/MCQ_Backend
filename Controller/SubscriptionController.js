@@ -168,7 +168,7 @@ export const verifySubscriptionPayment = async (req, res) => {
       userStandard: student.classStandard || "N/A",
       userSelectedCourseId: course._id,
       userSelectedCourse: course.title,
-      userSeletectedSubjects: enrolledSubjects,
+      userSelectedSubjects: enrolledSubjects,
       plan: plan.name,
       planamount: plan.amount,
       durationInDays: plan.durationInDays,
