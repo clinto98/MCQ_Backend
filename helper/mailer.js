@@ -4,15 +4,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.office365.com',  // Outlook / Microsoft SMTP server
-  port: 587,                   // STARTTLS port
-  secure: false,               // Use TLS, not SSL
+  service: 'gmail', // or use other SMTP services
   auth: {
-    user: process.env.EMAIL_USER, // your Outlook email address
-    pass: process.env.EMAIL_PASS, // your Outlook password or app password
-  },
-  tls: {
-    ciphers: 'SSLv3',
+    user: process.env.EMAIL_USER, // your email address
+    pass: process.env.EMAIL_PASS, // your app password or SMTP password
   },
 });
 
