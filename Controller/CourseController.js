@@ -1,5 +1,6 @@
 import Course from "../Models/CourseModel.js";
 import Enrollment from "../Models/EnrollmentModel.js";
+import Student from "../Models/StudentModel.js";
 
 
 export const createCourse = async (req, res) => {
@@ -107,15 +108,20 @@ export const getAllCoursesforHighersecondary = async (req, res) => {
 };
 // Enroll or update enrollment
 export const enrollCourse = async (req, res) => {
+
   try {
     const { studentId, courseId, selectedSubjects } = req.body;
 
-    if (!studentId || !courseId || !selectedSubjects?.length) {
+       if (!studentId || !courseId || !selectedSubjects?.length) {
       return res.status(400).json({ message: "All fields are required" });
     }
+   const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
 
+  
     const courseIdStr = String(courseId);
-
     // ✅ Check if course exists
     const course = await Course.findById(courseIdStr);
     if (!course) {
@@ -140,10 +146,15 @@ export const enrollCourse = async (req, res) => {
 
       return res.status(200).json({
         message: "Enrollment successful (new student record created)",
+        userId: student._id,
+        userName: student.FullName,
+        userEmail: student.email,
+        planName: student.currentPlan,
+        ExpiryDate: student.planExpiryDate,
         enrollment,
       });
     }
-
+    
     // ✅ Find if this courseId already exists in enrolledCourses
     const existingCourse = enrollment.enrolledCourses.find(
       (c) => c.courseId.toString() === courseIdStr

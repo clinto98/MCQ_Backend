@@ -89,7 +89,7 @@ export const updateStudentProfile = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: "No valid fields provided for update" });
     }
-    
+
     const updatedStudent = await Student.findByIdAndUpdate(
       studentId,
       { $set: updates },
@@ -275,7 +275,7 @@ export const studentSignup = async (req, res) => {
     await newStudent.save(); // ✅ ensures _id is created
     // ✅ Generate token AFTER saving
     const token = generateToken(newStudent);
-    
+
     return res.status(201).json({
       message: "Student registered successfully",
       token,
@@ -355,7 +355,7 @@ export const studentLogin = async (req, res) => {
     }
 
     console.log("student", student);
-    
+
 
     // Validate password
     const isMatch = await bcrypt.compare(password, student.password);
@@ -393,10 +393,6 @@ export const studentLogin = async (req, res) => {
           enrollmentDate: ec.enrollmentDate,
         }))
       : [];
-
-    console.log("enrolledCourses", enrolledCourses);
-
-
     const preferredSubjects = enrollment ? enrollment.preferredSubjects : [];
 
     res.status(200).json({
@@ -404,11 +400,12 @@ export const studentLogin = async (req, res) => {
       token,
       student: {
         id: student._id,
-        firstName: student.FirstName,
-        lastName: student.LastName,
+        fullName: student.FullName,
         email: student.email,
+        planName: student.currentPlan,
+        planExpiryDate: student.planExpiryDate,
       },
-      enrolledCourses,   // ✅ now should include BOTH
+      enrolledCourses,
       preferredSubjects,
     });
   } catch (error) {
@@ -416,9 +413,6 @@ export const studentLogin = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
-
 
 export const studentLogout = (req, res) => {
   try {
