@@ -58,7 +58,7 @@ export const studentRegisterGoogle = async (req, res) => {
 };
 
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECERT_KEY, {
+  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: '15d',
   })
 }
@@ -353,6 +353,9 @@ export const studentLogin = async (req, res) => {
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
+
+    console.log("student", student);
+    
 
     // Validate password
     const isMatch = await bcrypt.compare(password, student.password);

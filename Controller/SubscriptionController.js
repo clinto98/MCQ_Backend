@@ -5,6 +5,7 @@ import SubscriptionPlan from "../Models/SubscriptionPlanModel.js";
 import Student from "../Models/StudentModel.js";
 import Payment from "../Models/PaymentModel.js";
 import Enrollment from "../Models/EnrollmentModel.js";
+import Course from "../Models/CourseModel.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -23,7 +24,7 @@ export const createSubscriptionOrder = async (req, res) => {
     const student = await Student.findById(studentId);
     if (!student) return res.status(404).json({ message: "Invalid student" });
 
-     if (
+    if (
       student.currentPlan === plan.name &&
       student.planExpiryDate &&
       new Date(student.planExpiryDate) > new Date()
@@ -70,6 +71,7 @@ export const verifySubscriptionPayment = async (req, res) => {
     if (!orderId || !paymentId || !signature || !planId || !studentId || !courseId) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
+
     // 🔒 Verify Razorpay signature
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -80,20 +82,30 @@ export const verifySubscriptionPayment = async (req, res) => {
       await Payment.findOneAndUpdate({ orderId }, { status: "failed" });
       return res.status(400).json({ success: false, message: "Payment verification failed" });
     }
-    // 🧾 Fetch plan and compute subscription end date
+
+    // 🧾 Fetch plan details
     const plan = await SubscriptionPlan.findById(planId);
     if (!plan) return res.status(404).json({ message: "Invalid plan" });
 
+    // 🧠 Fetch student details
+    const student = await Student.findById(studentId);
+    if (!student) return res.status(404).json({ message: "Invalid student" });
+
+    // 🏫 Fetch course details
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ message: "Invalid course" });
+
+    // 📅 Compute subscription end date
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + plan.durationInDays);
 
-    // 💳 Update payment status
+    // 💳 Update payment record
     await Payment.findOneAndUpdate(
       { orderId },
       { paymentId, signature, status: "paid" }
     );
 
-    // 📘 Create subscription record
+    // 🧾 Create or update subscription
     await Subscription.create({
       studentId,
       planId,
@@ -111,6 +123,7 @@ export const verifySubscriptionPayment = async (req, res) => {
     });
 
     // 📚 Auto-enroll the student into the course
+    let enrolledSubjects = [];
     if (preferredSubjects && Array.isArray(preferredSubjects) && preferredSubjects.length > 0) {
       let enrollment = await Enrollment.findOne({ studentId });
 
@@ -131,23 +144,42 @@ export const verifySubscriptionPayment = async (req, res) => {
         const existingSubjects = enrollment.enrolledCourses[existingCourseIndex].selectedSubjects;
         const mergedSubjects = Array.from(new Set([...existingSubjects, ...preferredSubjects]));
         enrollment.enrolledCourses[existingCourseIndex].selectedSubjects = mergedSubjects;
+        enrolledSubjects = mergedSubjects;
       } else {
-        // New course enrollment
+        // Add new course enrollment
         enrollment.enrolledCourses.push({
           courseId,
           selectedSubjects: [...new Set(preferredSubjects)],
         });
+        enrolledSubjects = [...new Set(preferredSubjects)];
       }
+
       await enrollment.save();
     }
 
-    res.status(200).json({
+    // ✅ Success response with complete details
+    return res.status(200).json({
       success: true,
-      message: "Subscription activated and course enrolled successfully",
+      message: "Subscription verified and course enrollment successful",
+
+      userId: student._id,
+      userName: student.FullName,
+      userEmail: student.email,
+      userStandard: student.classStandard || "N/A",
+      userSelectedCourseId: course._id,
+      userSelectedCourse: course.title,
+      userSeletectedSubjects: enrolledSubjects,
       plan: plan.name,
-      planAmount: plan.amount,
+      planamount: plan.amount,
+      durationInDays: plan.durationInDays,
       startDate: new Date(),
       expiryDate: endDate,
+      status: "active",
+      payment: {
+        orderId,
+        paymentId,
+        status: "paid",
+      },
     });
   } catch (err) {
     console.error("❌ Error verifying subscription:", err);
