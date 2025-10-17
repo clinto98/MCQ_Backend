@@ -197,6 +197,40 @@ export const emailRegister = async (req, res) => {
   }
 };
 
+export const deleteStudent = async (req, res) => {
+  try {
+    const { studentId } = req.body; // Student ID comes from URL params
+
+    if (!studentId) {
+      return res.status(400).json({ message: "Student ID is required" });
+    }
+
+    // 🔹 Check if student exists
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // 🔹 Delete the student
+    await Student.findByIdAndDelete(studentId);
+
+    return res.status(200).json({
+      message: "Student deleted successfully",
+      deletedStudent: {
+        id: student._id,
+        FullName: student.FullName,
+        email: student.email,
+        phoneNumber: student.phoneNumber,
+        classStandard: student.classStandard,
+      },
+    });
+  } catch (error) {
+    console.error("Error deleting student:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 export const studentSignup = async (req, res) => {
   try {
     const {
