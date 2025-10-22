@@ -37,6 +37,7 @@ app.get('/', (req, res) => {
     res.send('Hello World!');
 })
 
+
 app.use('/api/course', CourseRoute);
 app.use('/api/mcq', McqRoute);
 app.use('/api/practiceplan', PracticeplanRoute);
