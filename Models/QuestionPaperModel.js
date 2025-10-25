@@ -1,21 +1,19 @@
 import mongoose from "mongoose";
-
+ 
 const optionSchema = new mongoose.Schema({
     text: {
         type: String,
         trim: true,
-        required: true,
     },
     diagramUrl: {
         type: String,
         default: null,
     },
-});
-
+}); 
+ 
 const previousQuestionSchema = new mongoose.Schema({
     question: {
         type: String,
-        required: true,
         trim: true,
     },
     options: {
@@ -23,9 +21,8 @@ const previousQuestionSchema = new mongoose.Schema({
         required: true,
     },
     correctAnswer: {
-        type: String,
+        type: optionSchema,
         required: true,
-        trim: true,
     },
     diagramUrl: {
         type: String,
@@ -43,9 +40,35 @@ const previousQuestionSchema = new mongoose.Schema({
         type: String,
         enum: ["easy", "medium", "hard"],
         default: "easy",
+        required: true,
+    },
+    explanation: {
+        type: String,
+        trim: true,
+    },
+    explanationImageUrl: {
+        type: String,
+        default: null,
+    },
+    keywords: {
+        type: [String],
+    },
+    unit: {
+        type: String,
+        trim: true,
+    },
+    unit_no: {
+        type: String,
+        trim: true,
+        required: true,
+    },
+    topic: {
+        type: String,
+        trim: true,
+        required: true,
     },
 });
-
+ 
 const previousPaperSchema = new mongoose.Schema(
     {
         examYear: {
@@ -79,7 +102,7 @@ const previousPaperSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
-
+ 
         sourceType: {
             type: String,
             enum: ["AI", "PDF", "Manual", "Other"],
@@ -95,12 +118,13 @@ const previousPaperSchema = new mongoose.Schema(
             trim: true,
             default: null,
         },
-        unit: {
-            type: String,
+        course: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Course",
             required: true,
         },
     },
     { timestamps: true }
 );
-
+ 
 export default mongoose.model("PreviousQuestionPaper", previousPaperSchema);
