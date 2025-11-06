@@ -22,7 +22,7 @@ export const createTodaysQuestions = async (req, res) => {
     if (existing) {
       return res.status(200).json({
         message: "Today's questions already created for this subject. Complete it before generating again.",
-        sessionId: existing._id,
+        quizId: existing._id,
       });
     }
 
@@ -55,7 +55,7 @@ export const createTodaysQuestions = async (req, res) => {
 
     return res.status(201).json({
       message: "Today's Questions created successfully",
-      sessionId: newSession._id,
+      quizId: newSession._id,
     });
   } catch (error) {
     console.error("Error creating today's questions:", error);
@@ -100,7 +100,7 @@ export const getTodaysQuestions = async (req, res) => {
 
     return res.status(200).json({
       message: "Today's Questions resumed",
-      sessionId: session._id,
+      quizId: session._id,
       Section1,
       currentQuestion: current,
       progress: session.progress,
@@ -147,8 +147,23 @@ export const checkTodaysAnswerById = async (req, res) => {
 
     // update progress
     session.progress.completedQuestions += 1;
-    if (isCorrect) session.progress.correctAnswers += 1;
-    else session.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      session.progress.correctAnswers += 1;
+
+      // ✅ store correct question
+      session.progress.correctAnswerList.push(questionId);
+
+    } else {
+      session.progress.wrongAnswers += 1;
+
+      // ✅ store wrong question + selected option
+      session.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
 
     // move current pointer
     let nextIndex = idx + 1;
@@ -176,5 +191,108 @@ export const checkTodaysAnswerById = async (req, res) => {
   } catch (error) {
     console.error("Error checking today's question:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const getTodaysAnalysisReport = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    // ✅ Fetch session
+    const session = await TodaysQuestions.findById(quizId).lean();
+    if (!session) {
+      return res.status(404).json({ message: "Today's session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    const correctIds = correctAnswerList.map(id => id.toString());
+    const wrongIds = wrongAnswerList.map(item => item.questionId.toString());
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Fetch detailed question data
+    const allQuestionIds = [...correctIds, ...wrongIds];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      { question: 1, correctAnswer: 1, topic: 1, explanation: 1 }
+    ).lean();
+
+    // ✅ Topic Accuracy Calculation
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) topicStats[q.topic] = { total: 0, correct: 0 };
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) {
+        topicStats[q.topic].correct++;
+      }
+    });
+
+    const topicPerformance = Object.keys(topicStats).map((topic) => ({
+      topic,
+      correctPercent: (
+        (topicStats[topic].correct / topicStats[topic].total) * 100
+      ).toFixed(0),
+    }));
+
+    // ✅ Correct Question Review
+    const correctQuestions = questionsData
+      .filter((q) => correctIds.includes(q._id.toString()))
+      .map((q) => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+      }));
+
+    // ✅ Wrong Question Review
+    const wrongQuestions = wrongAnswerList.map((item) => {
+      const q = questionsData.find(
+        (qq) => qq._id.toString() === item.questionId.toString()
+      );
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: item.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        answeredAt: item.answeredAt,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Today's session analysis generated successfully",
+      quizId,
+
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+
+      topicPerformance,
+
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching today's analysis:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };

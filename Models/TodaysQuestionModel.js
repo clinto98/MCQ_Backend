@@ -53,6 +53,21 @@ const todaysquestionsSchema = new mongoose.Schema(
       completedQuestions: { type: Number, default: 0 },
       correctAnswers: { type: Number, default: 0 },
       wrongAnswers: { type: Number, default: 0 },
+
+      // ✅ Store correct question IDs
+      correctAnswerList: [
+        { type: mongoose.Schema.Types.ObjectId, ref: "twelve" }
+      ],
+
+      // ✅ Store wrong question + selected option
+      wrongAnswerList: [
+        {
+          questionId: { type: mongoose.Schema.Types.ObjectId, ref: "twelve" },
+          selectedOption: { type: String },
+          answeredAt: { type: Date, default: Date.now }
+        }
+      ],
+      
       status: {
         type: String,
         enum: ["not_started", "in_progress", "completed"],

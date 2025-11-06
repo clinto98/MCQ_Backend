@@ -2,7 +2,7 @@ import Coupon from "../Models/CouponModel.js";
 import SubscriptionPlan from "../Models/SubscriptionPlanModel.js";
 
 // ✅ Create new coupon (admin use)
-export const createCoupon = async (req, res) => {
+export const createCoupon    = async (req, res) => {
   try {
     const { code, discountType, discountValue, validUntil, maxUsageCount } = req.body;
 

@@ -15,6 +15,7 @@ import cookieParser from "cookie-parser";
 import ConnectDB from "./Database/db.js";
 import SubscriptionRoute from "./Route/SubscriptionRoute.js"
 import { startSubscriptionExpiryJob } from "./Jobs/subscriptionExpiryJob.js";
+import couponRoute from "./Route/CouponRoute.js"
 
 await ConnectDB();
 
@@ -49,6 +50,7 @@ app.use('/api/payment', PaymentRoute)
 app.use('/api/todaysquestion', TodaysQuestionRoute);
 app.use('/api/subject', SubjectRoute)
 app.use('/api/subscription', SubscriptionRoute)
+app.use('/api/coupons',couponRoute)
 
 startSubscriptionExpiryJob()
 

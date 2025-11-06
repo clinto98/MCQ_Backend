@@ -245,7 +245,7 @@ export const generatePersonalizedMcq = async (req, res) => {
     // --- Step 11: Response ---
     return res.status(200).json({
       message: "Personalized MCQ generated successfully",
-      sessionId: personalizedSession._id,
+      quizId: personalizedSession._id,
       totalQuestions: shuffledQuestions.length,
       questionSources,
       examConfig,
@@ -536,9 +536,10 @@ const createPersonalizedSession = async ({
 export const getPersonalizedSession = async (req, res) => {
   try {
 
-    const {userId, syllabus , standard , subject} = req.body;
+    const {userId, syllabus , standard , subject , quizId} = req.body;
 
      const session = await PersonalizedPracticePlan.findOne({
+      _id:quizId,
       userId,
       syllabus,
       standard,
@@ -653,9 +654,9 @@ export const getAvailableTopics = async (req, res) => {
 export const checkPersonalizedAnswerById = async (req, res) => {
   try {
     const { questionId } = req.params;
-    const { userAnswer, userId } = req.body;
+    const { userAnswer, userId , quizId } = req.body;
 
-    if (!questionId || !userAnswer || !userId) {
+    if (!questionId || !userAnswer || !userId || !quizId) {
       return res.status(400).json({
         message: "questionId, userAnswer, and userId are required",
       });
@@ -663,6 +664,7 @@ export const checkPersonalizedAnswerById = async (req, res) => {
 
     // 🔹 Fetch active session and populate sections + currentQuestion
     const session = await PersonalizedPracticePlan.findOne({
+      _id: quizId,
       userId,
       isActive: true,
     })
@@ -709,8 +711,23 @@ export const checkPersonalizedAnswerById = async (req, res) => {
 
     // 🔹 Update progress
     session.progress.completedQuestions += 1;
-    if (isCorrect) session.progress.correctAnswers += 1;
-    else session.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      session.progress.correctAnswers += 1;
+
+      // ✅ Store correct question ID
+      session.progress.correctAnswerList.push(questionId);
+
+    } else {
+      session.progress.wrongAnswers += 1;
+
+      // ✅ Store wrong answer + selected option
+      session.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
 
     // 🔹 Move current question pointer (very simple: just go next in same section, or move section)
     let { section, questionIndex } = session.currentQuestion;
@@ -862,4 +879,106 @@ const shuffleArray = (array) => {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+};
+
+export const getPersonalizedAnalysisReport = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    // ✅ Fetch the specific personalized session
+    const session = await PersonalizedPracticePlan.findById(quizId).lean();
+    if (!session) {
+      return res.status(404).json({ message: "Personalized session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    // ✅ Normalize IDs for comparison
+    const correctIds = correctAnswerList.map(id => id.toString());
+    const wrongIds = wrongAnswerList.map(item => item.questionId.toString());
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Fetch detailed question data
+    const allQuestionIds = [...correctIds, ...wrongIds];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      { question: 1, correctAnswer: 1, topic: 1, explanation: 1 }
+    ).lean();
+
+    // ✅ Topic Performance
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) topicStats[q.topic] = { total: 0, correct: 0 };
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) topicStats[q.topic].correct++;
+    });
+
+    const topicPerformance = Object.keys(topicStats).map(topic => ({
+      topic,
+      correctPercent: (
+        (topicStats[topic].correct / topicStats[topic].total) *
+        100
+      ).toFixed(0),
+    }));
+
+    // ✅ Correct Questions Review List
+    const correctQuestions = questionsData
+      .filter(q => correctIds.includes(q._id.toString()))
+      .map(q => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+      }));
+
+    // ✅ Wrong Questions Review List
+    const wrongQuestions = wrongAnswerList.map(item => {
+      const q = questionsData.find(q => q._id.toString() === item.questionId.toString());
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: item.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        answeredAt: item.answeredAt,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Personalized practice analysis report generated",
+      quizId ,
+
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+
+      topicPerformance,
+
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching personalized analysis:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
 };

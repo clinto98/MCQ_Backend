@@ -52,6 +52,21 @@ const personalizedPracticePlanSchema = new mongoose.Schema(
       completedQuestions: { type: Number, default: 0 },
       correctAnswers: { type: Number, default: 0 },
       wrongAnswers: { type: Number, default: 0 },
+
+      // ✅ Simply store questionIds of correct answers
+      correctAnswerList: [
+        { type: mongoose.Schema.Types.ObjectId, ref: "twelve" }
+      ],
+
+      // ✅ Store wrong answers + what student selected
+      wrongAnswerList: [
+        {
+          questionId: { type: mongoose.Schema.Types.ObjectId, ref: "twelve" },
+          selectedOption: { type: String },
+          answeredAt: { type: Date, default: Date.now }
+        }
+      ],
+      
       status: {
         type: String,
         enum: ["not_started", "in_progress", "completed"],
