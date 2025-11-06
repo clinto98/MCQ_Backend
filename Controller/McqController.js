@@ -697,6 +697,21 @@ export const createTimeQuiz = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    await TimeQuestions.updateMany(
+      {
+        userId: StudentId,
+        subject: Subject,
+        Standard: Standard,
+        isActive: true
+      },
+      {
+        $set: {
+          isActive: false,
+          "progress.status": "completed"
+        }
+      }
+    );
+
     const questionCountPerSection = 10;
     const totalQuestions = Math.floor((challangeTime * 60) / 30); // 30 sec per question
     const numberOfSections = Math.ceil(totalQuestions / questionCountPerSection);
@@ -823,15 +838,30 @@ export const checkTimeAnswerById = async (req, res) => {
       currentQ = found.question;
     }
 
-    // ✅ Update question
+    // ✅ Update question attempt record
     currentQ.status = isCorrect ? "correct" : "incorrect";
     currentQ.attempts += 1;
     currentQ.answeredAt = new Date();
 
     // ✅ Update progress
     quiz.progress.completedQuestions += 1;
-    if (isCorrect) quiz.progress.correctAnswers += 1;
-    else quiz.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      quiz.progress.correctAnswers += 1;
+
+      // ✅ Store correct question
+      quiz.progress.correctAnswerList.push(questionId);
+
+    } else {
+      quiz.progress.wrongAnswers += 1;
+
+      // ✅ Store wrong question with selected option
+      quiz.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
 
     // ✅ Enforce wrong answers limit if configured
     if (
@@ -1066,5 +1096,107 @@ export const submitTimeAnswer = async (req, res) => {
   }
 };
 
+export const getTimeAnalysisReport = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    // ✅ Fetch the specific timed quiz session
+    const session = await TimeQuestions.findById(quizId).lean();
+
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    // ✅ Convert ObjectId to string for comparison
+    const correctIds = correctAnswerList.map(id => id.toString());
+    const wrongIds = wrongAnswerList.map(w => w.questionId.toString());
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Fetch necessary question details
+    const allQuestionIds = [...correctIds, ...wrongIds];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      { question: 1, options: 1, correctAnswer: 1, topic: 1, explanation: 1 }
+    ).lean();
+
+    // ✅ Topic Performance
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) {
+        topicStats[q.topic] = { total: 0, correct: 0 };
+      }
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) {
+        topicStats[q.topic].correct++;
+      }
+    });
+
+    const topicPerformance = Object.keys(topicStats).map((topic) => ({
+      topic,
+      correctPercent:
+        ((topicStats[topic].correct / topicStats[topic].total) * 100).toFixed(0),
+    }));
+
+    // ✅ Correct Questions
+    const correctQuestions = questionsData
+      .filter((q) => correctIds.includes(q._id.toString()))
+      .map((q) => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+        explanation: q.explanation
+      }));
+
+    // ✅ Wrong Questions
+    const wrongQuestions = wrongAnswerList.map((wrong) => {
+      const q = questionsData.find(
+        (item) => item._id.toString() === wrong.questionId.toString()
+      );
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: wrong.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Timed quiz analysis report generated",
+      sessionId: session._id,
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+      topicPerformance,
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching timed analysis:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 

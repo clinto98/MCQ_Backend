@@ -1077,6 +1077,7 @@ export const getAnalysisReport = async (req, res) => {
         question: q.question,
         correctAnswer: q.correctAnswer,
         topic: q.topic,
+        explanation: q.explanation,
       }));
 
     // ✅ Wrong Questions List (with user-selected option + explanation)
@@ -1091,7 +1092,6 @@ export const getAnalysisReport = async (req, res) => {
         selectedOption: wrong.selectedOption,
         correctAnswer: q.correctAnswer,
         explanation: q.explanation,
-        answeredAt: wrong.answeredAt,
       };
     });
 
