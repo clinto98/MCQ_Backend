@@ -1,5 +1,9 @@
 import express from "express";
-import { checkFlaggedAnswerById, checkMockAnswerById, checkTimeAnswerById, createBulkTwelfthQuestions, createTimeQuiz, createTwelfthQuestion, flagQuestion, getAllFlaggedQuestions, getMockQuestions, getTimedQuiz, MockBattle, submitTimeAnswer, unflagQuestion } from "../Controller/McqController.js";
+import { checkFlaggedAnswerById, checkMockAnswerById, 
+    checkTimeAnswerById, createBulkTwelfthQuestions, 
+    createTimeQuiz, createTwelfthQuestion, flagQuestion, 
+    getAllFlaggedQuestions, getMockQuestions, getTimedQuiz,
+     MockBattle, submitTimeAnswer, unflagQuestion,getTimeAnalysisReport,getMockAnalysisReport } from "../Controller/McqController.js";
 
 const router = express.Router();
 
@@ -16,6 +20,8 @@ router.post('/CreateCollectedQuestion', flagQuestion)
 router.post('/UnflagQuestion', unflagQuestion)
 router.post('/GetCollectedQuestion',getAllFlaggedQuestions)
 router.post('/CheckCollectedQuestion/:questionId',checkFlaggedAnswerById)
+router.get('/timequizanalysis/:quizId',getTimeAnalysisReport)
+router.get('/getmockanalysis/:quizId',getMockAnalysisReport)
 
 
 export default router;

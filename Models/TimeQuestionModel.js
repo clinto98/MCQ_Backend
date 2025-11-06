@@ -16,6 +16,12 @@ const timeQuestionSchema = new mongoose.Schema({
     attempts: { type: Number, default: 0 },
 });
 
+const wrongAnswerSchema = new mongoose.Schema({
+    questionId: { type: mongoose.Schema.Types.ObjectId, ref: "twelve", required: true },
+    selectedOption: { type: String, required: true },
+    answeredAt: { type: Date, default: Date.now },
+});
+
 const TimeQuestionsSchema = new mongoose.Schema(
     {
         userId: {
@@ -23,45 +29,44 @@ const TimeQuestionsSchema = new mongoose.Schema(
             ref: "User",
             required: true,
         },
-        subject: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        Standard: {
-            type: String,
-        },
-        syllabus: {
-            type: String,
-        },
-        challangeTime: {
-            type: Number,
-            default: 0
-        },
-        WrongQuestionsLimit: {
-            type: Number,
-            default: 0
-        },
+
+        subject: { type: String, required: true, trim: true },
+        Standard: { type: String },
+        syllabus: { type: String },
+
+        challangeTime: { type: Number, default: 0 },
+        WrongQuestionsLimit: { type: Number, default: 0 },
         timeLimit: { type: Number, default: 0 },
+
         sections: [
             {
-                questions: [timeQuestionSchema]
-            }
+                questions: [timeQuestionSchema],
+            },
         ],
+
         currentQuestion: {
             sectionIndex: { type: Number, default: 0 },
             questionIndex: { type: Number, default: 0 },
         },
+
         progress: {
             completedQuestions: { type: Number, default: 0 },
             correctAnswers: { type: Number, default: 0 },
             wrongAnswers: { type: Number, default: 0 },
+
+            correctAnswerList: [
+                { type: mongoose.Schema.Types.ObjectId, ref: "twelve" },
+            ],
+
+            wrongAnswerList: [wrongAnswerSchema],
+
             status: {
                 type: String,
                 enum: ["not_started", "in_progress", "completed"],
                 default: "not_started",
             },
         },
+
         isActive: { type: Boolean, default: true },
     },
     { timestamps: true }

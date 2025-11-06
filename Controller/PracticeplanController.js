@@ -230,12 +230,11 @@ export const checkAnswerById = async (req, res) => {
       question.correctAnswer.trim().toLowerCase() ===
       userAnswer.trim().toLowerCase();
 
-    // ✅ Find active session
+    // Find session
     const session = await RandomQuestions.findOne({ userId, isActive: true });
     if (!session) {
       return res.status(404).json({ message: "Active session not found" });
     }
-
     // ✅ Locate question in session (in any section)
     const updateQuestionStatus = (section) => {
       const idx = section.findIndex(
@@ -268,12 +267,20 @@ export const checkAnswerById = async (req, res) => {
       });
     }
 
-    // ✅ Update progress
+    // ✅ Store question result
     session.progress.completedQuestions += 1;
-    if (isCorrect) session.progress.correctAnswers += 1;
-    else session.progress.wrongAnswers += 1;
+    if (isCorrect) {
+      session.progress.correctAnswers += 1;
+      session.progress.correctAnswerList.push(questionId);
+    } else {
+      session.progress.wrongAnswers += 1;
+      session.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+      });
+    }
 
-    // ✅ Move currentQuestion to the next one
+    // ✅ Move pointer to next question
     let nextSection = sectionNumber;
     let nextIndex = updatedIndex + 1;
 
@@ -286,13 +293,11 @@ export const checkAnswerById = async (req, res) => {
       nextIndex = 0;
     }
     if (nextSection === 3 && nextIndex >= session.Section3.length) {
-      // ✅ All completed
       session.progress.status = "completed";
       session.isActive = false;
     } else {
       session.progress.status = "in_progress";
     }
-
     // ✅ Save currentQuestion pointer
     session.currentQuestion = {
       section: nextSection,
@@ -321,7 +326,6 @@ export const checkAnswerById = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 
 
@@ -1004,6 +1008,113 @@ export const GetRandomQuestions = async (req, res) => {
   }
 };
 
+export const getAnalysisReport = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // ✅ Fetch the specific session
+    const session = await RandomQuestions.findById(sessionId).lean();
+
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Get all question details required for review + topic breakdown
+    const allQuestionIds = [
+      ...correctAnswerList,
+      ...wrongAnswerList.map((w) => w.questionId),
+    ];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      {
+        question: 1,
+        options: 1,
+        correctAnswer: 1,
+        topic: 1,
+        explanation: 1,
+      }
+    ).lean();
+    const correctIds = correctAnswerList.map(id => id.toString());
+    // ✅ Topic Performance Calculation
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) {
+        topicStats[q.topic] = { total: 0, correct: 0 };
+      }
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) {
+        topicStats[q.topic].correct++;
+      }
+    });
+
+    const topicPerformance = Object.keys(topicStats).map((topic) => ({
+      topic,
+      correctPercent:
+        ((topicStats[topic].correct / topicStats[topic].total) * 100).toFixed(0),
+    }));
+
+    // ✅ Correct Questions List
+    const correctQuestions = questionsData
+      .filter((q) => correctIds.includes(q._id.toString()))
+      .map((q) => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+        explanation: q.explanation,
+      }));
+
+    // ✅ Wrong Questions List (with user-selected option + explanation)
+    const wrongQuestions = wrongAnswerList.map((wrong) => {
+      const q = questionsData.find(
+        (item) => item._id.toString() === wrong.questionId.toString()
+      );
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: wrong.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Session analysis report generated",
+      sessionId: session._id,
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+      topicPerformance,
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching analysis:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 
 
