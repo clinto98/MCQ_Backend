@@ -164,55 +164,55 @@ export const generatePreviousYearSession = async (req, res) => {
 
 // Get a fully populated session (with actual question texts/options)
 export const getPreviousYearSession = async (req, res) => {
-    try {
-       
-        const { userId, subject, syllabus, standard } = req.body;
+  try {
 
-        if (!userId) {
-            return res.status(400).json({ message: "userId is required" });
-        }
-        if (!subject || !syllabus || !standard) {
-            return res.status(400).json({ message: "userId, subject, syllabus and standard are required" });
-        }
-        const session = await PreviousyearQuestions.findOne({ userId, isActive: true })
-            .lean();
-        if (!session) return res.status(404).json({ message: "No active session found" });
+    const { userId, subject, syllabus, standard } = req.body;
 
-        // collect paper ids
-        const paperIds = [
-            ...session.Section1.map((x) => x.questionId),
-            ...session.Section2.map((x) => x.questionId),
-            ...session.Section3.map((x) => x.questionId),
-        ];
-        const unique = [...new Set(paperIds.map((id) => id.toString()))];
-        const papers = await PreviousQuestionPaper.find({ _id: { $in: unique } }).lean();
-
-        const indexById = new Map(papers.map((p) => [p._id.toString(), p]));
-
-        const mapSection = (arr) =>
-            arr.map((x) => {
-                const paper = indexById.get(x.questionId.toString());
-                const pq = paper?.questions?.[x.paperQuestionIndex];
-                return {
-                    ...x,
-                    question: pq?.question,
-                    options: pq?.options || [],
-                    correctAnswer: pq?.correctAnswer,
-                };
-            });
-
-        return res.status(200).json({
-            message: "Session retrieved",
-            Section1: mapSection(session.Section1),
-            Section2: mapSection(session.Section2),
-            Section3: mapSection(session.Section3),
-            currentQuestion: session.currentQuestion,
-            progress: session.progress,
-        });
-    } catch (error) {
-        console.error("Error getting PYQ session:", error);
-        res.status(500).json({ message: "Server error", error: error.message });
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
     }
+    if (!subject || !syllabus || !standard) {
+      return res.status(400).json({ message: "userId, subject, syllabus and standard are required" });
+    }
+    const session = await PreviousyearQuestions.findOne({ userId, isActive: true })
+      .lean();
+    if (!session) return res.status(404).json({ message: "No active session found" });
+
+    // collect paper ids
+    const paperIds = [
+      ...session.Section1.map((x) => x.questionId),
+      ...session.Section2.map((x) => x.questionId),
+      ...session.Section3.map((x) => x.questionId),
+    ];
+    const unique = [...new Set(paperIds.map((id) => id.toString()))];
+    const papers = await PreviousQuestionPaper.find({ _id: { $in: unique } }).lean();
+
+    const indexById = new Map(papers.map((p) => [p._id.toString(), p]));
+
+    const mapSection = (arr) =>
+      arr.map((x) => {
+        const paper = indexById.get(x.questionId.toString());
+        const pq = paper?.questions?.[x.paperQuestionIndex];
+        return {
+          ...x,
+          question: pq?.question,
+          options: pq?.options || [],
+          correctAnswer: pq?.correctAnswer,
+        };
+      });
+
+    return res.status(200).json({
+      message: "Session retrieved",
+      Section1: mapSection(session.Section1),
+      Section2: mapSection(session.Section2),
+      Section3: mapSection(session.Section3),
+      currentQuestion: session.currentQuestion,
+      progress: session.progress,
+    });
+  } catch (error) {
+    console.error("Error getting PYQ session:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 };
 
 // Check answer by pointing to paper + index
@@ -333,26 +333,26 @@ export const checkPreviousYearAnswer = async (req, res) => {
 
 
 function shuffleArray(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 
 
 export const GetAllUnits = async (req, res) => {
-    try {
-        const { subject, syllabus, standard } = req.body;
-        if (!subject || !syllabus || !standard) {
-            return res.status(400).json({ message: "subject, syllabus and standard are required" });
-        }
-        const units = await PreviousQuestionPaper.distinct("unit", { subject, syllabus, standard });
-        res.status(200).json({ message: "Units fetched successfully", units });
-    } catch (error) {
-        console.error("Error retrieving topics:", error);
-        res.status(500).json({ message: "Server error", error: error.message });
+  try {
+    const { subject, syllabus, standard } = req.body;
+    if (!subject || !syllabus || !standard) {
+      return res.status(400).json({ message: "subject, syllabus and standard are required" });
     }
+    const units = await PreviousQuestionPaper.distinct("unit", { subject, syllabus, standard });
+    res.status(200).json({ message: "Units fetched successfully", units });
+  } catch (error) {
+    console.error("Error retrieving topics:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 }

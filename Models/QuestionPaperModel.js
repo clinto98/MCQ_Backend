@@ -10,7 +10,7 @@ const optionSchema = new mongoose.Schema({
         default: null,
     },
 }); 
- 
+
 const previousQuestionSchema = new mongoose.Schema({
     question: {
         type: String,
@@ -38,8 +38,8 @@ const previousQuestionSchema = new mongoose.Schema({
     },
     difficulty: {
         type: String,
-        enum: ["easy", "medium", "hard"],
-        default: "easy",
+        enum: ["Easy", "Medium", "Hard"],
+        default: "Easy",
         required: true,
     },
     explanation: {

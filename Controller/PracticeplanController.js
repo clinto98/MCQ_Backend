@@ -325,6 +325,8 @@ export const checkAnswerById = async (req, res) => {
 
 
 
+
+
 // ✅ getRandomQuestion
 export const getRandomQuestion = async (req, res) => {
   try {
@@ -659,9 +661,9 @@ export const createMissedQuestions = async (req, res) => {
 
 export const getMissedQuestions = async (req, res) => {
   try {
-    const { userId, subject , standard , syllabus } = req.body;
+    const { userId, subject, standard, syllabus } = req.body;
 
-    const missedData = await MissedQuestions.findOne({ userId, subject , syllabus , standard  });
+    const missedData = await MissedQuestions.findOne({ userId, subject, syllabus, standard });
 
     if (!missedData) {
       return res.status(404).json({ message: "No missed questions found" });
@@ -793,7 +795,7 @@ export const checkMissedAnswer = async (req, res) => {
         message: "Question not found in missed questions session",
       });
     }
-    
+
     session.questions[index].attempts += 1;
     session.questions[index].answeredAt = new Date();
     session.questions[index].status = isCorrect ? "correct" : "incorrect";

@@ -33,7 +33,7 @@ export const createTodaysQuestions = async (req, res) => {
       { $match: { subject, syllabus, Standard: standard } },
       { $sample: { size: totalNeeded } },
     ]);
-    
+
 
     const Section1 = randomQuestions.map((q, i) => ({
       questionId: q._id,
@@ -116,7 +116,7 @@ export const getTodaysQuestions = async (req, res) => {
 // Check an answer for "Today's Questions"
 export const checkTodaysAnswerById = async (req, res) => {
   try {
-    const {questionId} = req.params;
+    const { questionId } = req.params;
     const { userAnswer, userId } = req.body;
 
     if (!questionId || !userAnswer || !userId) {

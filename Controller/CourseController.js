@@ -7,7 +7,7 @@ export const createCourse = async (req, res) => {
   try {
     const { title, description, category, standerd, courseImage, syllabus, startDate, endDate } = req.body;
 
-    if (!title || !syllabus) {
+    if (!title || !syllabus ) {
       return res.status(400).json({ message: "Title, syllabus are required" });
     }
 
@@ -28,6 +28,8 @@ export const createCourse = async (req, res) => {
     res.status(500).json({ message: "Error creating course", error: error.message });
   }
 };
+
+
 
 export const updateCourse = async (req, res) => {
   try {
