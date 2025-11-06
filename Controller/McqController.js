@@ -163,8 +163,23 @@ export const checkMockAnswerById = async (req, res) => {
 
     // Update progress
     quiz.progress.completedQuestions += 1;
-    if (isCorrect) quiz.progress.correctAnswers += 1;
-    else quiz.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      quiz.progress.correctAnswers += 1;
+
+      // ✅ store correct question
+      quiz.progress.correctAnswerList.push(questionId);
+
+    } else {
+      quiz.progress.wrongAnswers += 1;
+
+      // ✅ store wrong question & selected option
+      quiz.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
 
     // Move current question to next one
     let nextIndex = idx + 1;
@@ -219,8 +234,6 @@ export const checkMockAnswerById = async (req, res) => {
 export const MockBattle = async (req, res) => {
   try {
     let { StudentId, Standard, syllabus, Subject, FrequentlyAsked, ExamSimulation, topic } = req.body;
-
-    console.log(req.body);
 
     // Convert booleans from string if needed
     FrequentlyAsked = FrequentlyAsked === "true" || FrequentlyAsked === true;
@@ -1199,4 +1212,110 @@ export const getTimeAnalysisReport = async (req, res) => {
   }
 };
 
+export const getMockAnalysisReport = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    // ✅ Fetch the specific mock quiz session
+    const session = await MockQuestions.findById(quizId).lean();
+    if (!session) {
+      return res.status(404).json({ message: "Mock session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    // ✅ Convert ObjectIds to strings for comparison
+    const correctIds = correctAnswerList.map(id => id.toString());
+    const wrongIds = wrongAnswerList.map(w => w.questionId.toString());
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Get details for all involved questions
+    const allQuestionIds = [...correctIds, ...wrongIds];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      { question: 1, options: 1, correctAnswer: 1, topic: 1, explanation: 1 }
+    ).lean();
+
+    // ✅ Topic Performance Calculation
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) {
+        topicStats[q.topic] = { total: 0, correct: 0 };
+      }
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) {
+        topicStats[q.topic].correct++;
+      }
+    });
+
+    const topicPerformance = Object.keys(topicStats).map((topic) => ({
+      topic,
+      correctPercent:
+        ((topicStats[topic].correct / topicStats[topic].total) * 100).toFixed(0),
+    }));
+
+    // ✅ Correct Questions Review List
+    const correctQuestions = questionsData
+      .filter((q) => correctIds.includes(q._id.toString()))
+      .map((q) => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+        explanation: q.explanation,
+      }));
+
+    // ✅ Wrong Questions Review List
+    const wrongQuestions = wrongAnswerList.map((wrong) => {
+      const q = questionsData.find(
+        (item) => item._id.toString() === wrong.questionId.toString()
+      );
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: wrong.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        answeredAt: wrong.answeredAt,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Mock analysis report generated",
+      sessionId: session._id,
+
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+
+      topicPerformance,
+
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching mock analysis:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
