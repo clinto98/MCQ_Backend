@@ -18,5 +18,6 @@ router.post('/userPreferences/:studentId', updateUserPreferences);
 router.post('/UpdateStudentProfile/:studentId', updateStudentProfile)
 router.get('/GetStudentProfile/:studentId', getStudentProfile)
 
+
 export default router;
 
