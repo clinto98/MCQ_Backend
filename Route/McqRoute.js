@@ -3,7 +3,7 @@ import { checkFlaggedAnswerById, checkMockAnswerById,
     checkTimeAnswerById, createBulkTwelfthQuestions, 
     createTimeQuiz, createTwelfthQuestion, flagQuestion, 
     getAllFlaggedQuestions, getMockQuestions, getTimedQuiz,
-     MockBattle, submitTimeAnswer, unflagQuestion,getTimeAnalysisReport,getMockAnalysisReport } from "../Controller/McqController.js";
+     MockBattle, submitTimeAnswer, unflagQuestion,getTimeAnalysisReport,getMockAnalysisReport,getFlaggedAnalysisReport } from "../Controller/McqController.js";
 
 const router = express.Router();
 
@@ -22,6 +22,7 @@ router.post('/GetCollectedQuestion',getAllFlaggedQuestions)
 router.post('/CheckCollectedQuestion/:questionId',checkFlaggedAnswerById)
 router.get('/timequizanalysis/:quizId',getTimeAnalysisReport)
 router.get('/getmockanalysis/:quizId',getMockAnalysisReport)
+router.get('/getflaggedanalysis/:quizId',getFlaggedAnalysisReport)
 
 
 export default router;

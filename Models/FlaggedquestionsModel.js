@@ -18,14 +18,10 @@ const FlaggedquestionModel = new mongoose.Schema({
 
 const FlaggedQuestionsSchema = new mongoose.Schema(
     {
-        userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
-        },
-        questions: [FlaggedquestionModel], // all missed questions in one array
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
-        // Track the current question
+        questions: [FlaggedquestionModel],
+
         currentQuestion: {
             index: { type: Number, default: 0 },
             questionId: {
@@ -39,6 +35,19 @@ const FlaggedQuestionsSchema = new mongoose.Schema(
             completedQuestions: { type: Number, default: 0 },
             correctAnswers: { type: Number, default: 0 },
             wrongAnswers: { type: Number, default: 0 },
+
+            correctAnswerList: [
+                { type: mongoose.Schema.Types.ObjectId, ref: "twelve" }
+            ],
+
+            wrongAnswerList: [
+                {
+                    questionId: { type: mongoose.Schema.Types.ObjectId, ref: "twelve" },
+                    selectedOption: { type: String },
+                    answeredAt: { type: Date, default: Date.now }
+                }
+            ],
+
             status: {
                 type: String,
                 enum: ["not_started", "in_progress", "completed"],

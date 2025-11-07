@@ -15,7 +15,7 @@ export const studentRegisterGoogle = async (req, res) => {
   try {
     const { email, fullName } = req.body;
     if (!email, !fullName) {
-      return res.status(400).json({ message: "ID token is required" });
+      return res.status(400).json({ message: "email and fullname is required" });
     }
 
     let student = await Student.findOne({ email });
@@ -29,14 +29,36 @@ export const studentRegisterGoogle = async (req, res) => {
       await student.save();
     } else {
       const token = generateToken(student);
+
+      const enrollment = await Enrollment.findOne({ studentId: student._id })
+        .populate({
+          path: "enrolledCourses.courseId",
+          model: "Course",
+          select: "title",
+        });
+
+      const enrolledCourses = enrollment
+        ? enrollment.enrolledCourses
+          .filter(ec => ec.courseId) // only valid courses
+          .map(ec => ({
+            id: ec.courseId._id,
+            title: ec.courseId.title,
+            enrollmentDate: ec.enrollmentDate,
+            selectedsubjects: ec.selectedSubjects
+          }))
+        : [];
+
       return res.status(200).json({
         message: "Student already registered",
         student: {
           id: student._id,
           FullName: student.FullName,
           email: student.email,
+          planName: student.currentPlan,
+          planExpiryDate: student.planExpiryDate,
         },
-        token
+        token,
+        enrolledCourses,
       });
     }
 
@@ -128,12 +150,31 @@ export const getStudentProfile = async (req, res) => {
     }
 
     const student = await Student.findById(studentId).select(
-      "FullName email phoneNumber countryCode state dateofBirth Nationality"
+      "FullName email phoneNumber countryCode state dateofBirth Nationality currentPlan planExpiryDate"
     );
 
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
+
+    const enrollment = await Enrollment.findOne({ studentId: studentId })
+      .populate({
+        path: "enrolledCourses.courseId",
+        model: "Course",
+        select: "title",
+      });
+
+    // Prepare enrolled courses
+    const enrolledCourses = enrollment
+      ? enrollment.enrolledCourses
+        .filter(ec => ec.courseId) // only valid courses
+        .map(ec => ({
+          id: ec.courseId._id,
+          title: ec.courseId.title,
+          enrollmentDate: ec.enrollmentDate,
+          selectedsubjects: ec.selectedSubjects
+        }))
+      : [];
 
     return res.status(200).json({
       message: "Student profile fetched successfully",
@@ -146,7 +187,10 @@ export const getStudentProfile = async (req, res) => {
         state: student.state,
         dateofBirth: student.dateofBirth,
         Nationality: student.Nationality,
+        planName:student.currentPlan,
+        planExpiryDate:student.planExpiryDate
       },
+      enrolledCourses,
     });
   } catch (error) {
     console.error("Error fetching student profile:", error);
@@ -425,10 +469,10 @@ export const studentLogin = async (req, res) => {
           id: ec.courseId._id,
           title: ec.courseId.title,
           enrollmentDate: ec.enrollmentDate,
+          selectedsubjects: ec.selectedSubjects
         }))
       : [];
     const preferredSubjects = enrollment ? enrollment.preferredSubjects : [];
-
     res.status(200).json({
       message: "Login successful",
       token,

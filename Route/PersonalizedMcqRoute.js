@@ -5,7 +5,8 @@ import {
   getAvailableTopics,
   getAvailablePreviousYears,
   checkPersonalizedAnswerById,
-  getActivePersonalizedPlans
+  getActivePersonalizedPlans,
+  getPersonalizedAnalysisReport
 } from "../Controller/PersonalizedMcqController.js";
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.post("/topics", getAvailableTopics);
 router.get("/previous-years", getAvailablePreviousYears);
 router.post("/checkanswerbyid/:questionId", checkPersonalizedAnswerById)
 router.post('/personalizedactive', getActivePersonalizedPlans)
+router.get('/getpersonaliseanalysis/:quizId',getPersonalizedAnalysisReport)
 
 export default router;
 

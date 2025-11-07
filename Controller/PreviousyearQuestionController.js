@@ -218,6 +218,7 @@ export const getPreviousYearSession = async (req, res) => {
 // Check answer by pointing to paper + index
 export const checkPreviousYearAnswer = async (req, res) => {
   try {
+
     const { questionId } = req.params; // this is the Question _id inside PreviousQuestionPaper.questions
     const { userId, userAnswer } = req.body;
 
@@ -233,7 +234,7 @@ export const checkPreviousYearAnswer = async (req, res) => {
       .populate("Section2.questionId", "questions correctAnswer subject")
       .populate("Section3.questionId", "questions correctAnswer subject")
       .populate("currentQuestion.questionId", "questions correctAnswer subject");
-
+console.log(session)
     if (!session) {
       return res.status(404).json({ message: "Active session not found" });
     }
@@ -283,8 +284,28 @@ export const checkPreviousYearAnswer = async (req, res) => {
 
     // 🔹 Update progress
     session.progress.completedQuestions += 1;
-    if (isCorrect) session.progress.correctAnswers += 1;
-    else session.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      session.progress.correctAnswers += 1;
+
+      // ✅ store correct reference
+      session.progress.correctAnswerList.push({
+        paperId: paperDoc._id,
+        paperQuestionIndex: target.paperQuestionIndex,
+      });
+
+    } else {
+      session.progress.wrongAnswers += 1;
+
+      // ✅ store wrong answer with selected option
+      session.progress.wrongAnswerList.push({
+        paperId: paperDoc._id,
+        paperQuestionIndex: target.paperQuestionIndex,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
+
 
     // 🔹 Move pointer
     let { section, questionIndex } = session.currentQuestion;

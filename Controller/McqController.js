@@ -455,7 +455,7 @@ export const flagQuestion = async (req, res) => {
       );
 
       if (exists) {
-        return res.status(200).json({ message: "Question already flagged.", flaggedQuestion: flaggedDoc });
+        return res.status(200).json({ message: "Question already flagged.", quizId: flaggedDoc._id, flaggedQuestion: flaggedDoc });
       }
 
       // Add new question with courseId
@@ -481,6 +481,7 @@ export const flagQuestion = async (req, res) => {
 
     return res.status(200).json({
       message: "Question flagged successfully.",
+      quizId:flaggedDoc,
       flaggedQuestion: flaggedDoc
     });
 
@@ -596,8 +597,24 @@ export const checkFlaggedAnswerById = async (req, res) => {
 
     // Update progress
     flaggedDoc.progress.completedQuestions += 1;
-    if (isCorrect) flaggedDoc.progress.correctAnswers += 1;
-    else flaggedDoc.progress.wrongAnswers += 1;
+
+    if (isCorrect) {
+      flaggedDoc.progress.correctAnswers += 1;
+
+      // ✅ store correct answer question id
+      flaggedDoc.progress.correctAnswerList.push(questionId);
+
+    } else {
+      flaggedDoc.progress.wrongAnswers += 1;
+
+      // ✅ store wrong answer details
+      flaggedDoc.progress.wrongAnswerList.push({
+        questionId,
+        selectedOption: userAnswer,
+        answeredAt: new Date(),
+      });
+    }
+
     flaggedDoc.progress.status = "in_progress";
 
     // Move currentQuestion to the next unanswered question if exists
@@ -1319,3 +1336,106 @@ export const getMockAnalysisReport = async (req, res) => {
   }
 };
 
+export const getFlaggedAnalysisReport = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    // ✅ Fetch flagged session
+    const session = await FlaggedQuestion.findById(quizId).lean();
+    if (!session) {
+      return res.status(404).json({ message: "Flagged session not found" });
+    }
+
+    const {
+      progress: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        correctAnswerList = [],
+        wrongAnswerList = [],
+      },
+    } = session;
+
+    // ✅ Normalize ObjectId→string for comparison
+    const correctIds = correctAnswerList.map(id => id.toString());
+    const wrongIds = wrongAnswerList.map(w => w.questionId.toString());
+
+    const scorePercentage =
+      completedQuestions > 0
+        ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
+        : 0;
+
+    // ✅ Fetch all needed question details
+    const allQuestionIds = [...correctIds, ...wrongIds];
+
+    const questionsData = await twelve.find(
+      { _id: { $in: allQuestionIds } },
+      { question: 1, options: 1, correctAnswer: 1, topic: 1, explanation: 1 }
+    ).lean();
+
+    // ✅ Topic Breakdown
+    const topicStats = {};
+    questionsData.forEach((q) => {
+      if (!topicStats[q.topic]) topicStats[q.topic] = { total: 0, correct: 0 };
+      topicStats[q.topic].total++;
+      if (correctIds.includes(q._id.toString())) {
+        topicStats[q.topic].correct++;
+      }
+    });
+
+    const topicPerformance = Object.keys(topicStats).map((topic) => ({
+      topic,
+      correctPercent:
+        ((topicStats[topic].correct / topicStats[topic].total) * 100).toFixed(0),
+    }));
+
+    // ✅ Review: Correct Questions
+    const correctQuestions = questionsData
+      .filter((q) => correctIds.includes(q._id.toString()))
+      .map((q) => ({
+        questionId: q._id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        topic: q.topic,
+      }));
+
+    // ✅ Review: Wrong Questions
+    const wrongQuestions = wrongAnswerList.map((wrong) => {
+      const q = questionsData.find(
+        (item) => item._id.toString() === wrong.questionId.toString()
+      );
+      return {
+        questionId: q._id,
+        question: q.question,
+        topic: q.topic,
+        selectedOption: wrong.selectedOption,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        answeredAt: wrong.answeredAt,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Flagged analysis report generated",
+      sessionId: session._id,
+
+      summary: {
+        completedQuestions,
+        correctAnswers,
+        wrongAnswers,
+        scorePercentage: scorePercentage + "%",
+      },
+
+      topicPerformance,
+
+      review: {
+        correctQuestions,
+        wrongQuestions,
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching flagged analysis:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
