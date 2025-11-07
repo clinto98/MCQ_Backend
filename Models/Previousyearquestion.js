@@ -58,6 +58,25 @@ const previousyearquestionsSchema = new mongoose.Schema(
       completedQuestions: { type: Number, default: 0 },
       correctAnswers: { type: Number, default: 0 },
       wrongAnswers: { type: Number, default: 0 },
+      
+      // ✅ store correctly answered PYQs (paperId + index)
+      correctAnswerList: [
+        {
+          paperId: { type: mongoose.Schema.Types.ObjectId, ref: "PreviousQuestionPaper" },
+          paperQuestionIndex: Number
+        }
+      ],
+
+      // ✅ store incorrect answers with selected option
+      wrongAnswerList: [
+        {
+          paperId: { type: mongoose.Schema.Types.ObjectId, ref: "PreviousQuestionPaper" },
+          paperQuestionIndex: Number,
+          selectedOption: String,
+          answeredAt: { type: Date, default: Date.now }
+        }
+      ],
+
       status: {
         type: String,
         enum: ["not_started", "in_progress", "completed"],
