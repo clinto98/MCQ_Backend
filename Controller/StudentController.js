@@ -36,7 +36,12 @@ export const studentRegisterGoogle = async (req, res) => {
           model: "Course",
           select: "title",
         });
-
+        
+        if(!enrollment){
+          res.status(404).json({
+            message:"enrollment not found for user"
+          })
+        }
       const enrolledCourses = enrollment
         ? enrollment.enrolledCourses
           .filter(ec => ec.courseId) // only valid courses
@@ -432,7 +437,6 @@ export const studentLogin = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    console.log("student", student);
 
 
     // Validate password
