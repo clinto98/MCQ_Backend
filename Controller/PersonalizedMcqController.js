@@ -599,7 +599,7 @@ export const getPersonalizedSession = async (req, res) => {
     res.status(200).json({
       message: "Personalized session retrieved successfully",
       session: {
-        _id: session._id,
+        quizId: session._id,
         subject: session.subject,
         Section1: mapSection(session.Section1),
         Section2: mapSection(session.Section2),

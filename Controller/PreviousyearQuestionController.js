@@ -218,8 +218,7 @@ export const getPreviousYearSession = async (req, res) => {
 // Check answer by pointing to paper + index
 export const checkPreviousYearAnswer = async (req, res) => {
   try {
-
-    const { questionId } = req.params; // this is the Question _id inside PreviousQuestionPaper.questions
+    const { questionId } = req.params; // This is the _id of the question inside paper.questions[]
     const { userId, userAnswer } = req.body;
 
     if (!userId || !questionId || !userAnswer) {
@@ -228,110 +227,100 @@ export const checkPreviousYearAnswer = async (req, res) => {
       });
     }
 
-    // 🔹 Find active PYQ session
-    const session = await PreviousyearQuestions.findOne({ userId, isActive: true })
-      .populate("Section1.questionId", "questions correctAnswer subject")
-      .populate("Section2.questionId", "questions correctAnswer subject")
-      .populate("Section3.questionId", "questions correctAnswer subject")
-      .populate("currentQuestion.questionId", "questions correctAnswer subject");
-console.log(session)
+    // ✅ Find the paper that contains this question
+    const paperDocment = await PreviousQuestionPaper.findById(questionId);
+    console.log(paperDocment);
+    
+
+    if (!paperDocment) {
+      return res.status(404).json({ message: "Question not found in any PYQ paper" });
+    }
+
+    // ✅ Extract the exact question object
+    const pquestion = paperDocment.questions.find(
+      (q) => q._id.toString() === questionId.toString()
+    );
+
+    if (!pquestion) {
+      return res.status(404).json({ message: "Question data missing in paper" });
+    }
+
+    console.log("Correct Answer:", pquestion.correctAnswer);
+
+    // ✅ Find active PYQ session
+    const session = await PreviousyearQuestions.findOne({ userId, isActive: true });
+
     if (!session) {
       return res.status(404).json({ message: "Active session not found" });
     }
 
-    // 🔹 Flatten all sections with section info
-    const allQuestions = [
-      ...session.Section1.map((q) => ({ ...q.toObject(), section: 1 })),
-      ...session.Section2.map((q) => ({ ...q.toObject(), section: 2 })),
-      ...session.Section3.map((q) => ({ ...q.toObject(), section: 3 })),
-    ];
+    // ✅ Locate question within session sections
+    const sectionKeys = ["Section1", "Section2", "Section3"];
+    let sectionKeyFound = null;
+    let questionIndex = -1;
 
-    // 🔹 Find the target question inside the session
-    const target = allQuestions.find(
-      (q) =>
-        q.questionId?._id.toString() === questionId.toString() ||
-        q.questionId?.toString() === questionId.toString()
-    );
+    for (const key of sectionKeys) {
+      questionIndex = session[key].findIndex(
+        (q) => q.questionId.toString() === paperDocment._id.toString()
+          && q.paperQuestionIndex === pquestion._id.toString()
+      );
 
-    if (!target) {
-      return res.status(404).json({ message: "Question not found in session" });
+      if (questionIndex !== -1) {
+        sectionKeyFound = key;
+        break;
+      }
     }
 
-    const paperDoc = target.questionId; // populated PreviousQuestionPaper
-    const pq = paperDoc.questions?.[target.paperQuestionIndex];
-    if (!pq) {
-      return res.status(404).json({ message: "Question not found in paper data" });
+    if (!sectionKeyFound) {
+      return res.status(404).json({ message: "Question not found in session mapping" });
     }
 
-    // 🔹 Check correctness
+    // ✅ Check correctness
     const isCorrect =
-      pq.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
+      pquestion.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
 
-    // 🔹 Update session
-    const sectionKey = `Section${target.section}`;
-    const sectionIdx = session[sectionKey].findIndex(
-      (q) =>
-        q.questionId._id.toString() === paperDoc._id.toString() &&
-        q.paperQuestionIndex === target.paperQuestionIndex
-    );
+    // ✅ Update session question status
+    const qRef = session[sectionKeyFound][questionIndex];
+    qRef.status = isCorrect ? "correct" : "incorrect";
+    qRef.attempts += 1;
+    qRef.answeredAt = new Date();
+    qRef.userAnswer = userAnswer;
 
-    if (sectionIdx !== -1) {
-      session[sectionKey][sectionIdx].status = isCorrect ? "correct" : "incorrect";
-      session[sectionKey][sectionIdx].attempts += 1;
-      session[sectionKey][sectionIdx].answeredAt = new Date();
-      session[sectionKey][sectionIdx].userAnswer = userAnswer;
-    }
-
-    // 🔹 Update progress
+    // ✅ Update progress
     session.progress.completedQuestions += 1;
 
     if (isCorrect) {
       session.progress.correctAnswers += 1;
-
-      // ✅ store correct reference
-      session.progress.correctAnswerList.push({
-        paperId: paperDoc._id,
-        paperQuestionIndex: target.paperQuestionIndex,
-      });
-
+      session.progress.correctAnswerList.push(questionId);
     } else {
       session.progress.wrongAnswers += 1;
-
-      // ✅ store wrong answer with selected option
       session.progress.wrongAnswerList.push({
-        paperId: paperDoc._id,
-        paperQuestionIndex: target.paperQuestionIndex,
+        questionId,
         selectedOption: userAnswer,
         answeredAt: new Date(),
       });
     }
 
+    // ✅ Move pointer
+    let { section, questionIndex: idx } = session.currentQuestion;
+    idx++;
 
-    // 🔹 Move pointer
-    let { section, questionIndex } = session.currentQuestion;
-    questionIndex++;
-
-    if (section === 1 && questionIndex >= session.Section1.length) {
-      section = 2;
-      questionIndex = 0;
-    }
-    if (section === 2 && questionIndex >= session.Section2.length) {
-      section = 3;
-      questionIndex = 0;
+    const currentSection = `Section${section}`;
+    if (idx >= session[currentSection].length) {
+      section++;
+      idx = 0;
     }
 
-    if (section === 3 && questionIndex >= session.Section3.length) {
-      // completed
+    if (section > 3 || session[`Section${section}`].length === 0) {
       session.progress.status = "completed";
       session.isActive = false;
       session.currentQuestion = { section: null, questionIndex: null, questionId: null };
     } else {
       session.progress.status = "in_progress";
-      const nextQ = session[`Section${section}`][questionIndex];
       session.currentQuestion = {
         section,
-        questionIndex,
-        questionId: nextQ?.questionId || null,
+        questionIndex: idx,
+        questionId: session[`Section${section}`][idx].questionId,
       };
     }
 
@@ -339,18 +328,20 @@ console.log(session)
 
     return res.status(200).json({
       message: "Answer checked",
-      questionId: pq._id,
+      questionId: pquestion._id,
       userAnswer,
       isCorrect,
-      correctAnswer: isCorrect ? undefined : pq.correctAnswer,
+      correctAnswer: isCorrect ? undefined : pquestion.correctAnswer,
       progress: session.progress,
       currentQuestion: session.currentQuestion,
     });
+
   } catch (error) {
     console.error("Error checking PYQ answer:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 
 function shuffleArray(arr) {
