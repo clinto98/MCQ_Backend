@@ -423,7 +423,7 @@ export const flagQuestion = async (req, res) => {
 
 
     // Find if a flagged question document exists for this user
-    let flaggedDoc = await FlaggedQuestion.findOne({ userId });
+    let flaggedDoc = await FlaggedQuestion.findOne({ userId, isActive: true });
 
     if (!flaggedDoc) {
       // Create new flagged question document with currentQuestion set to this question
