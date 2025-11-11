@@ -1356,7 +1356,6 @@ export const getFlaggedAnalysisReport = async (req, res) => {
       },
     } = session;
 
-    // ✅ Normalize ObjectId→string for comparison
     const correctIds = correctAnswerList.map(id => id.toString());
     const wrongIds = wrongAnswerList.map(w => w.questionId.toString());
 
@@ -1365,7 +1364,6 @@ export const getFlaggedAnalysisReport = async (req, res) => {
         ? ((correctAnswers / completedQuestions) * 100).toFixed(2)
         : 0;
 
-    // ✅ Fetch all needed question details
     const allQuestionIds = [...correctIds, ...wrongIds];
 
     const questionsData = await twelve.find(
@@ -1373,14 +1371,11 @@ export const getFlaggedAnalysisReport = async (req, res) => {
       { question: 1, options: 1, correctAnswer: 1, topic: 1, explanation: 1 }
     ).lean();
 
-    // ✅ Topic Breakdown
     const topicStats = {};
     questionsData.forEach((q) => {
       if (!topicStats[q.topic]) topicStats[q.topic] = { total: 0, correct: 0 };
       topicStats[q.topic].total++;
-      if (correctIds.includes(q._id.toString())) {
-        topicStats[q.topic].correct++;
-      }
+      if (correctIds.includes(q._id.toString())) topicStats[q.topic].correct++;
     });
 
     const topicPerformance = Object.keys(topicStats).map((topic) => ({
@@ -1389,7 +1384,6 @@ export const getFlaggedAnalysisReport = async (req, res) => {
         ((topicStats[topic].correct / topicStats[topic].total) * 100).toFixed(0),
     }));
 
-    // ✅ Review: Correct Questions
     const correctQuestions = questionsData
       .filter((q) => correctIds.includes(q._id.toString()))
       .map((q) => ({
@@ -1399,7 +1393,6 @@ export const getFlaggedAnalysisReport = async (req, res) => {
         topic: q.topic,
       }));
 
-    // ✅ Review: Wrong Questions
     const wrongQuestions = wrongAnswerList.map((wrong) => {
       const q = questionsData.find(
         (item) => item._id.toString() === wrong.questionId.toString()
@@ -1413,6 +1406,25 @@ export const getFlaggedAnalysisReport = async (req, res) => {
         explanation: q.explanation,
         answeredAt: wrong.answeredAt,
       };
+    });
+
+    // ✅ Reset session for replay
+    await FlaggedQuestion.findByIdAndUpdate(quizId, {
+      isActive: true,
+      progress: {
+        completedQuestions: 0,
+        correctAnswers: 0,
+        wrongAnswers: 0,
+        status: "in_progress",
+        correctAnswerList: [],
+        wrongAnswerList: [],
+      },
+      questions: session.questions.map(q => ({
+        ...q,
+        status: "pending",
+        attempts: 0,
+        answeredAt: null,
+      })),
     });
 
     return res.status(200).json({
@@ -1439,3 +1451,4 @@ export const getFlaggedAnalysisReport = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
