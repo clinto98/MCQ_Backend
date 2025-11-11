@@ -14,7 +14,7 @@ router.post('/GetRandomQuestions', getRandomQuestion)
 router.post('/CreateMissedQuestions', createMissedQuestions)
 router.post('/GetMissedQuestions', getMissedQuestions)
 router.post('/checkMissedAnswerById', checkMissedAnswer)
-router.get('/sessionanalysis/:sessionId',getAnalysisReport)
+router.get('/sessionanalysis/:quizId',getAnalysisReport)
 
 
 export default router;

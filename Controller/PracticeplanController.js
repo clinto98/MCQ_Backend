@@ -1012,10 +1012,10 @@ export const GetRandomQuestions = async (req, res) => {
 
 export const getAnalysisReport = async (req, res) => {
   try {
-    const { sessionId } = req.params;
+    const { quizId } = req.params;
 
     // ✅ Fetch the specific session
-    const session = await RandomQuestions.findById(sessionId).lean();
+    const session = await RandomQuestions.findById(quizId).lean();
 
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
