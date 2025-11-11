@@ -590,6 +590,7 @@ export const checkFlaggedAnswerById = async (req, res) => {
       return res.status(404).json({ message: "Question not found in flagged questions" });
     }
 
+
     // Update question status
     flaggedDoc.questions[idx].status = isCorrect ? "correct" : "incorrect";
     flaggedDoc.questions[idx].attempts += 1;
