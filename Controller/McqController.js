@@ -708,6 +708,7 @@ export const getAllFlaggedQuestions = async (req, res) => {
 
     res.status(200).json({
       message: "Flagged questions retrieved successfully",
+      quizId:flaggedDoc._id,
       questions: mappedQuestions,
       currentQuestion,
       progress: flaggedDoc.progress,
@@ -1210,7 +1211,7 @@ export const getTimeAnalysisReport = async (req, res) => {
 
     return res.status(200).json({
       message: "Timed quiz analysis report generated",
-      sessionId: session._id,
+      quizId: session._id,
       summary: {
         completedQuestions,
         correctAnswers,
@@ -1313,7 +1314,7 @@ export const getMockAnalysisReport = async (req, res) => {
 
     return res.status(200).json({
       message: "Mock analysis report generated",
-      sessionId: session._id,
+      quizId: session._id,
 
       summary: {
         completedQuestions,
@@ -1408,28 +1409,9 @@ export const getFlaggedAnalysisReport = async (req, res) => {
       };
     });
 
-    // ✅ Reset session for replay
-    await FlaggedQuestion.findByIdAndUpdate(quizId, {
-      isActive: true,
-      progress: {
-        completedQuestions: 0,
-        correctAnswers: 0,
-        wrongAnswers: 0,
-        status: "in_progress",
-        correctAnswerList: [],
-        wrongAnswerList: [],
-      },
-      questions: session.questions.map(q => ({
-        ...q,
-        status: "pending",
-        attempts: 0,
-        answeredAt: null,
-      })),
-    });
-
     return res.status(200).json({
       message: "Flagged analysis report generated",
-      sessionId: session._id,
+      quizId: session._id,
 
       summary: {
         completedQuestions,
