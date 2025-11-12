@@ -16,7 +16,7 @@ export const generatePreviousYearSession = async (req, res) => {
       includeAttempted,
     } = req.body;
 
-    
+
     if (!userId || !subject) {
       return res.status(400).json({ message: "userId and subject are required" });
 
@@ -232,6 +232,7 @@ export const checkPreviousYearAnswer = async (req, res) => {
     // ✅ Find the paper that contains this question
     const paperDocment = await PreviousQuestionPaper.findById(questionId);
     console.log(paperDocment);
+    
     
 
     if (!paperDocment) {
