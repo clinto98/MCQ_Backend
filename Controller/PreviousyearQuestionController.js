@@ -51,10 +51,12 @@ export const generatePreviousYearSession = async (req, res) => {
     if (years?.length) match.examYear = { $in: years };
     if (units?.length) match.unit = { $in: units };
 
+    console.log(match)
+
     const papers = await PreviousQuestionPaper.find(match)
       .select("questions examYear unit difficulty subject syllabus standard")
       .lean();
-
+console.log(papers)
     let pool = [];
     papers.forEach((paper) => {
       let questions = paper.questions;
@@ -166,7 +168,19 @@ export const generatePreviousYearSession = async (req, res) => {
 export const getPreviousYearSession = async (req, res) => {
   try {
 
+<<<<<<< HEAD
     const { userId, subject, syllabus, standard } = req.body;
+=======
+        if (!userId) {
+            return res.status(400).json({ message: "userId is required" });
+        }
+        if (!subject || !syllabus || !standard) {
+            return res.status(400).json({ message: "userId, subject, syllabus and standard are required" });
+        }
+        const session = await PreviousyearQuestions.findOne({ userId, isActive: true , subject })
+            .lean();
+        if (!session) return res.status(404).json({ message: "No active session found" });
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
 
     if (!userId) {
       return res.status(400).json({ message: "userId is required" });
@@ -218,15 +232,20 @@ export const getPreviousYearSession = async (req, res) => {
 // Check answer by pointing to paper + index
 export const checkPreviousYearAnswer = async (req, res) => {
   try {
+<<<<<<< HEAD
     const { questionId } = req.params;
+=======
+    const { questionId } = req.params; // this is question._id inside paper.questions[]
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
     const { userId, userAnswer } = req.body;
 
     if (!userId || !questionId || !userAnswer) {
       return res.status(400).json({
-        message: "userId, questionId, and userAnswer are required",
+        message: "userId, quizId, and userAnswer are required",
       });
     }
 
+<<<<<<< HEAD
     // ✅ 1. Find the paper that contains this question
     const paperDocument = await PreviousQuestionPaper.findOne({
       "questions._id": questionId,
@@ -259,12 +278,15 @@ export const checkPreviousYearAnswer = async (req, res) => {
     const isCorrect = correctAnswerText === userAnswerText;
 
     // ✅ 4. Find the active session
+=======
+    // ✅ Find active PYQ session
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
     const session = await PreviousyearQuestions.findOne({ userId, isActive: true });
-
     if (!session) {
       return res.status(404).json({ message: "Active session not found" });
     }
 
+<<<<<<< HEAD
     // ✅ 5. Locate question in session mapping
     const sectionKeys = ["Section1", "Section2", "Section3"];
     let sectionKeyFound = null;
@@ -296,6 +318,44 @@ export const checkPreviousYearAnswer = async (req, res) => {
     qRef.attempts = (qRef.attempts || 0) + 1;
     qRef.answeredAt = new Date();
     qRef.userAnswer = userAnswer;
+=======
+    // ✅ Flatten session questions
+    const allQuestions = [
+      ...session.Section1.map((q) => ({ ...q.toObject(), section: 1 })),
+      ...session.Section2.map((q) => ({ ...q.toObject(), section: 2 })),
+      ...session.Section3.map((q) => ({ ...q.toObject(), section: 3 })),
+    ];
+
+    // ✅ Find question reference inside session
+    const target = allQuestions.find((q) => q.questionId.toString() === questionId);
+    if (!target) {
+      return res.status(404).json({ message: "Question not found in session" });
+    }
+
+    // ✅ Fetch the question from the paper using nested query
+    const paperDoc = await PreviousQuestionPaper.findById( "questionId");
+console.log(paperDoc);
+
+    if (!paperDoc) {
+      return res.status(404).json({ message: "Question not found in paper" });
+    }
+
+    // ✅ Compare answer
+    const isCorrect =
+      pquestion.correctAnswer.trim().toLowerCase() ===
+      userAnswer.trim().toLowerCase();
+
+    // ✅ Update session section entry
+    const sectionKey = `Section${target.section}`;
+    const idx = session[sectionKey].findIndex(
+      (q) => q.questionId.toString() === questionId
+    );
+
+    session[sectionKey][idx].status = isCorrect ? "correct" : "incorrect";
+    session[sectionKey][idx].attempts += 1;
+    session[sectionKey][idx].answeredAt = new Date();
+    session[sectionKey][idx].userAnswer = userAnswer;
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
 
     // ✅ 7. Update session progress
     session.progress.completedQuestions += 1;
@@ -312,17 +372,31 @@ export const checkPreviousYearAnswer = async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
     // ✅ 8. Move question pointer
     let { section, questionIndex: idx } = session.currentQuestion;
     idx++;
+=======
+    // ✅ Move current question pointer like your other controllers
+    let { section, questionIndex } = session.currentQuestion;
+    questionIndex++;
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
 
-    const currentSection = `Section${section}`;
-    if (idx >= session[currentSection].length) {
-      section++;
-      idx = 0;
+    if (section === 1 && questionIndex >= session.Section1.length) {
+      section = 2;
+      questionIndex = 0;
     }
+<<<<<<< HEAD
 
     if (section > 3 || !session[`Section${section}`] || session[`Section${section}`].length === 0) {
+=======
+    if (section === 2 && questionIndex >= session.Section2.length) {
+      section = 3;
+      questionIndex = 0;
+    }
+    if (section === 3 && questionIndex >= session.Section3.length) {
+      // ✅ Session complete
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
       session.progress.status = "completed";
       session.isActive = false;
       session.currentQuestion = { section: null, questionIndex: null, questionId: null };
@@ -330,8 +404,8 @@ export const checkPreviousYearAnswer = async (req, res) => {
       session.progress.status = "in_progress";
       session.currentQuestion = {
         section,
-        questionIndex: idx,
-        questionId: session[`Section${section}`][idx].questionId,
+        questionIndex,
+        questionId: session[`Section${section}`][questionIndex].questionId,
       };
     }
 
@@ -339,9 +413,14 @@ export const checkPreviousYearAnswer = async (req, res) => {
 
     // ✅ 9. Respond
     return res.status(200).json({
+<<<<<<< HEAD
       message: "Answer checked successfully",
       paperId: paperDocument._id,
       questionId: pquestion._id,
+=======
+      message: "Answer checked",
+      questionId,
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
       userAnswer,
       isCorrect,
       correctAnswer: isCorrect ? undefined : correctAnswerText,
@@ -357,7 +436,10 @@ export const checkPreviousYearAnswer = async (req, res) => {
 
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> ee0aaee24a7a4314b703244821dbf961e62cd899
 function shuffleArray(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

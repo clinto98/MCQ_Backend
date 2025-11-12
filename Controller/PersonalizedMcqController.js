@@ -254,6 +254,7 @@ export const generatePersonalizedMcq = async (req, res) => {
         questionNumber: index + 1,
         question: q.question,
         options: normalizeOptions(q.options || []),
+        correctAnswer:q.correctAnswer,
         difficulty: q.difficulty,
         topic: q.topic,
         source: q.source || "mixed",
