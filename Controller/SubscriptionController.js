@@ -6,6 +6,7 @@ import Student from "../Models/StudentModel.js";
 import Payment from "../Models/PaymentModel.js";
 import Enrollment from "../Models/EnrollmentModel.js";
 import Course from "../Models/CourseModel.js";
+import Coupon from "../Models/CouponModel.js"
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -16,14 +17,16 @@ const razorpay = new Razorpay({
 // 1️⃣ Create Razorpay Order for Subscription
 export const createSubscriptionOrder = async (req, res) => {
   try {
-    const { studentId, planId } = req.body;
+    const { studentId, planId, couponCode } = req.body;
 
+    // 1️⃣ Fetch plan and student
     const plan = await SubscriptionPlan.findById(planId);
     if (!plan) return res.status(404).json({ message: "Invalid plan" });
 
     const student = await Student.findById(studentId);
     if (!student) return res.status(404).json({ message: "Invalid student" });
 
+    // 2️⃣ Check if student already has an active plan
     if (
       student.currentPlan === plan.name &&
       student.planExpiryDate &&
@@ -35,32 +38,92 @@ export const createSubscriptionOrder = async (req, res) => {
       });
     }
 
-    const options = {
-      amount: plan.amount * 100,
-      currency: "INR",
-      receipt: `sub_${Date.now()}`,
-    };
+    // 3️⃣ Initialize amount and coupon variables
+    let finalAmount = plan.amount;
+    let coupon = null;
 
-    const order = await razorpay.orders.create(options);
-    const payment = await Payment.create({
-      orderId: order.id,
-      amount: plan.amount,
+    // 4️⃣ Apply coupon only if provided
+    if (couponCode && couponCode.trim() !== "") {
+      coupon = await Coupon.findOne({ code: couponCode });
+
+      if (!coupon) {
+        return res.status(400).json({ success: false, message: "Invalid coupon code" });
+      }
+
+      // Validate coupon
+      const now = new Date();
+      if (!coupon.active) {
+        return res.status(400).json({ success: false, message: "Coupon is not active" });
+      }
+      if (coupon.validFrom && now < new Date(coupon.validFrom)) {
+        return res.status(400).json({ success: false, message: "Coupon not yet valid" });
+      }
+      if (coupon.validUntil && now > new Date(coupon.validUntil)) {
+        return res.status(400).json({ success: false, message: "Coupon expired" });
+      }
+      if (coupon.maxUsageCount && coupon.usedCount >= coupon.maxUsageCount) {
+        return res.status(400).json({ success: false, message: "Coupon usage limit reached" });
+      }
+
+      // Apply discount
+      if (coupon.discountType === "percentage") {
+        finalAmount = plan.amount - (plan.amount * coupon.discountValue) / 100;
+      } else if (coupon.discountType === "flat") {
+        finalAmount = plan.amount - coupon.discountValue;
+      }
+
+      // Ensure not below zero
+      if (finalAmount < 0) finalAmount = 0;
+
+    }
+
+    // 5️⃣ Create Razorpay order only if finalAmount > 0
+    let order = null;
+    if (finalAmount > 0) {
+      order = await razorpay.orders.create({
+        amount: Math.round(finalAmount * 100),
+        currency: "INR",
+        receipt: `sub_${Date.now()}`,
+      });
+    }else{
+      finalAmount = 1;
+      order = await razorpay.orders.create({
+        amount: 100,
+        currency: "INR",
+        receipt: `sub_${Date.now()}`,
+      });
+    }
+
+    console.log(order)
+
+    // 6️⃣ Create payment record
+    await Payment.create({
+      orderId: order ? order.id : null,
+      amount: finalAmount,
       currency: "INR",
       userId: studentId,
-      status: "created",
+      status: finalAmount === 0 ? "paid" : "created", // auto mark free plan as paid
+      couponCode: coupon ? coupon.code : null,
     });
 
+    // 7️⃣ Respond with order info
     res.status(201).json({
       success: true,
-      orderId: order.id,
+      orderId: order ? order.id : null,
       plan,
-      key: process.env.RAZORPAY_KEY_ID,
+      finalAmount:  finalAmount,
+      couponApplied: coupon ? coupon.code : null,
+      message: coupon
+        ? `Coupon ${coupon.code} applied successfully`
+        : "No coupon applied",
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Order creation failed" });
   }
 };
+
+
 
 // 2️⃣ Verify Payment + Activate Subscription
 export const verifySubscriptionPayment = async (req, res) => {
