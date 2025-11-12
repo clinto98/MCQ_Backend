@@ -218,7 +218,7 @@ export const getPreviousYearSession = async (req, res) => {
 // Check answer by pointing to paper + index
 export const checkPreviousYearAnswer = async (req, res) => {
   try {
-    const { questionId } = req.params; // This is the _id of the question inside paper.questions[]
+    const { questionId } = req.params;
     const { userId, userAnswer } = req.body;
 
     if (!userId || !questionId || !userAnswer) {
@@ -227,17 +227,20 @@ export const checkPreviousYearAnswer = async (req, res) => {
       });
     }
 
-    // ✅ Find the paper that contains this question
-    const paperDocment = await PreviousQuestionPaper.findById(questionId);
-    console.log(paperDocment);
+    // ✅ 1. Find the paper that contains this question
+    const paperDocument = await PreviousQuestionPaper.findOne({
+      "questions._id": questionId,
+    });
+
+    console.log("paer",paperDocument);
     
 
-    if (!paperDocment) {
+    if (!paperDocument) {
       return res.status(404).json({ message: "Question not found in any PYQ paper" });
     }
 
-    // ✅ Extract the exact question object
-    const pquestion = paperDocment.questions.find(
+    // ✅ 2. Extract the question object
+    const pquestion = paperDocument.questions.find(
       (q) => q._id.toString() === questionId.toString()
     );
 
@@ -245,24 +248,33 @@ export const checkPreviousYearAnswer = async (req, res) => {
       return res.status(404).json({ message: "Question data missing in paper" });
     }
 
-    console.log("Correct Answer:", pquestion.correctAnswer);
+    // ✅ 3. Extract correct answer text safely
+    const correctAnswerText = (
+      (pquestion.correctAnswer?.text || pquestion.correctAnswer || "")
+        .trim()
+        .toLowerCase()
+    );
+    const userAnswerText = userAnswer.trim().toLowerCase();
 
-    // ✅ Find active PYQ session
+    const isCorrect = correctAnswerText === userAnswerText;
+
+    // ✅ 4. Find the active session
     const session = await PreviousyearQuestions.findOne({ userId, isActive: true });
 
     if (!session) {
       return res.status(404).json({ message: "Active session not found" });
     }
 
-    // ✅ Locate question within session sections
+    // ✅ 5. Locate question in session mapping
     const sectionKeys = ["Section1", "Section2", "Section3"];
     let sectionKeyFound = null;
     let questionIndex = -1;
 
     for (const key of sectionKeys) {
       questionIndex = session[key].findIndex(
-        (q) => q.questionId.toString() === paperDocment._id.toString()
-          && q.paperQuestionIndex === pquestion._id.toString()
+        (q) =>
+          q.questionId.toString() === questionId.toString() ||
+          q.paperQuestionId?.toString() === questionId.toString()
       );
 
       if (questionIndex !== -1) {
@@ -272,21 +284,20 @@ export const checkPreviousYearAnswer = async (req, res) => {
     }
 
     if (!sectionKeyFound) {
-      return res.status(404).json({ message: "Question not found in session mapping" });
+      return res.status(404).json({
+        message:
+          "Question not found in session mapping — check if your session stores correct questionId",
+      });
     }
 
-    // ✅ Check correctness
-    const isCorrect =
-      pquestion.correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
-
-    // ✅ Update session question status
+    // ✅ 6. Update session question
     const qRef = session[sectionKeyFound][questionIndex];
     qRef.status = isCorrect ? "correct" : "incorrect";
-    qRef.attempts += 1;
+    qRef.attempts = (qRef.attempts || 0) + 1;
     qRef.answeredAt = new Date();
     qRef.userAnswer = userAnswer;
 
-    // ✅ Update progress
+    // ✅ 7. Update session progress
     session.progress.completedQuestions += 1;
 
     if (isCorrect) {
@@ -301,7 +312,7 @@ export const checkPreviousYearAnswer = async (req, res) => {
       });
     }
 
-    // ✅ Move pointer
+    // ✅ 8. Move question pointer
     let { section, questionIndex: idx } = session.currentQuestion;
     idx++;
 
@@ -311,7 +322,7 @@ export const checkPreviousYearAnswer = async (req, res) => {
       idx = 0;
     }
 
-    if (section > 3 || session[`Section${section}`].length === 0) {
+    if (section > 3 || !session[`Section${section}`] || session[`Section${section}`].length === 0) {
       session.progress.status = "completed";
       session.isActive = false;
       session.currentQuestion = { section: null, questionIndex: null, questionId: null };
@@ -326,21 +337,24 @@ export const checkPreviousYearAnswer = async (req, res) => {
 
     await session.save();
 
+    // ✅ 9. Respond
     return res.status(200).json({
-      message: "Answer checked",
+      message: "Answer checked successfully",
+      paperId: paperDocument._id,
       questionId: pquestion._id,
       userAnswer,
       isCorrect,
-      correctAnswer: isCorrect ? undefined : pquestion.correctAnswer,
+      correctAnswer: isCorrect ? undefined : correctAnswerText,
       progress: session.progress,
       currentQuestion: session.currentQuestion,
     });
-
   } catch (error) {
     console.error("Error checking PYQ answer:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
 
 
 
