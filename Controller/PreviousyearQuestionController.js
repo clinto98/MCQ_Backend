@@ -233,7 +233,7 @@ export const checkPreviousYearAnswer = async (req, res) => {
     const paperDocment = await PreviousQuestionPaper.findById(questionId);
     console.log(paperDocment);
     
-    
+
 
     if (!paperDocment) {
       return res.status(404).json({ message: "Question not found in any PYQ paper" });
@@ -361,13 +361,66 @@ function shuffleArray(arr) {
 export const GetAllUnits = async (req, res) => {
   try {
     const { subject, syllabus, standard } = req.body;
+
     if (!subject || !syllabus || !standard) {
-      return res.status(400).json({ message: "subject, syllabus and standard are required" });
+      return res.status(400).json({
+        message: "subject, syllabus, and standard are required",
+      });
     }
-    const units = await PreviousQuestionPaper.distinct("unit", { subject, syllabus, standard });
-    res.status(200).json({ message: "Units fetched successfully", units });
+
+    // 1️⃣ Fetch all papers that match subject, syllabus, and standard
+    const papers = await PreviousQuestionPaper.find({
+      subject,
+      syllabus,
+      standard,
+    });
+
+    console.log("data",papers);
+    
+
+    if (!papers.length) {
+      return res.status(404).json({
+        message: "No papers found for given criteria",
+        units: [],
+      });
+    }
+
+    console.log("📘 Papers found:", papers.length);
+
+    // 2️⃣ Collect all units from nested questions
+    let units = [];
+    for (const paper of papers) {
+      if (paper.questions && Array.isArray(paper.questions)) {
+        const paperUnits = paper.questions
+          .map((q) => q.unit?.trim())
+          .filter(Boolean); // remove empty/null values
+        units.push(...paperUnits);
+      }
+    }
+
+    // 3️⃣ Remove duplicates
+    units = [...new Set(units)];
+
+    console.log("✅ Units found:", units);
+
+    if (!units.length) {
+      return res.status(404).json({
+        message: "No units found for given criteria",
+        units,
+      });
+    }
+
+    // 4️⃣ Send response
+    return res.status(200).json({
+      message: "Units fetched successfully",
+      units,
+    });
   } catch (error) {
-    console.error("Error retrieving topics:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Error retrieving units:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
-}
+};
+
